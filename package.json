@@ -1,0 +1,15 @@
+{
+  "name": "fex-crm",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "install:all": "npm install --prefix server && npm install --prefix client",
+    "build": "npm run install:all && npm run build --prefix client",
+    "start": "node server/index.js",
+    "dev:server": "node server/index.js",
+    "dev:client": "npm run dev --prefix client"
+  }
+}

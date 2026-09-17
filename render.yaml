@@ -1,0 +1,22 @@
+# Render Blueprint — deploys the API + built React app as one web service.
+# In Render: New > Blueprint, point at this repo, then fill in the env vars.
+services:
+  - type: web
+    name: fex-crm
+    runtime: node
+    plan: starter
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      # Server-side (never exposed to the browser)
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      # Build-time for the React client (Vite inlines these into the build)
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
