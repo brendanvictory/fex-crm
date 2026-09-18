@@ -1,0 +1,117 @@
+import { useEffect, useState } from 'react';
+import Layout from '../components/Layout.jsx';
+import { api } from '../api';
+
+export default function Settings() {
+  const [statuses, setStatuses] = useState([]);
+  const [disps, setDisps] = useState([]);
+  const [err, setErr] = useState('');
+  const [newStatus, setNewStatus] = useState({ name: '', sort_order: 0 });
+  const [newDisp, setNewDisp] = useState({ name: '', maps_to_status_id: '' });
+
+  async function load() {
+    try {
+      const [s, d] = await Promise.all([api('/config/statuses'), api('/config/dispositions')]);
+      setStatuses(s); setDisps(d);
+    } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, []);
+
+  const editStatus = (id, patch) => setStatuses((rows) => rows.map((r) => r.id === id ? { ...r, ...patch } : r));
+  const editDisp = (id, patch) => setDisps((rows) => rows.map((r) => r.id === id ? { ...r, ...patch } : r));
+
+  async function saveStatus(s) {
+    try { await api(`/config/statuses/${s.id}`, { method: 'PATCH', body: JSON.stringify({ name: s.name, sort_order: Number(s.sort_order), is_active: s.is_active, is_default: s.is_default }) }); load(); }
+    catch (e) { setErr(e.message); }
+  }
+  async function delStatus(id) { try { await api(`/config/statuses/${id}`, { method: 'DELETE' }); load(); } catch (e) { setErr(e.message); } }
+  async function addStatus(e) {
+    e.preventDefault();
+    try { await api('/config/statuses', { method: 'POST', body: JSON.stringify({ ...newStatus, sort_order: Number(newStatus.sort_order) }) }); setNewStatus({ name: '', sort_order: 0 }); load(); }
+    catch (e) { setErr(e.message); }
+  }
+
+  async function saveDisp(d) {
+    try { await api(`/config/dispositions/${d.id}`, { method: 'PATCH', body: JSON.stringify({ name: d.name, maps_to_status_id: d.maps_to_status_id || null, is_active: d.is_active }) }); load(); }
+    catch (e) { setErr(e.message); }
+  }
+  async function delDisp(id) { try { await api(`/config/dispositions/${id}`, { method: 'DELETE' }); load(); } catch (e) { setErr(e.message); } }
+  async function addDisp(e) {
+    e.preventDefault();
+    try { await api('/config/dispositions', { method: 'POST', body: JSON.stringify({ ...newDisp, maps_to_status_id: newDisp.maps_to_status_id || null }) }); setNewDisp({ name: '', maps_to_status_id: '' }); load(); }
+    catch (e) { setErr(e.message); }
+  }
+
+  return (
+    <Layout>
+      <div className="page-head"><h1>Settings</h1></div>
+      {err && <p className="error">{err}</p>}
+
+      <div className="stack">
+        <div className="card">
+          <div className="section-title">Lead statuses</div>
+          <div className="table-wrap">
+            <table className="data">
+              <thead><tr><th>Order</th><th>Name</th><th>Active</th><th>Default</th><th></th></tr></thead>
+              <tbody>
+                {statuses.map((s) => (
+                  <tr key={s.id}>
+                    <td><input style={{ width: 60 }} type="number" value={s.sort_order ?? 0} onChange={(e) => editStatus(s.id, { sort_order: e.target.value })} /></td>
+                    <td><input value={s.name} onChange={(e) => editStatus(s.id, { name: e.target.value })} /></td>
+                    <td><input type="checkbox" checked={!!s.is_active} onChange={(e) => editStatus(s.id, { is_active: e.target.checked })} /></td>
+                    <td><input type="checkbox" checked={!!s.is_default} onChange={(e) => editStatus(s.id, { is_default: e.target.checked })} /></td>
+                    <td><div className="row-actions">
+                      <button className="btn-ghost btn-sm" onClick={() => saveStatus(s)}>Save</button>
+                      <button className="btn-ghost btn-sm" onClick={() => delStatus(s.id)}>Delete</button>
+                    </div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <form className="filters" style={{ marginTop: 12 }} onSubmit={addStatus}>
+            <input type="number" placeholder="Order" style={{ width: 80 }} value={newStatus.sort_order} onChange={(e) => setNewStatus({ ...newStatus, sort_order: e.target.value })} />
+            <input type="text" placeholder="New status name" value={newStatus.name} onChange={(e) => setNewStatus({ ...newStatus, name: e.target.value })} required />
+            <button className="btn" type="submit">Add status</button>
+          </form>
+          <p className="muted" style={{ marginBottom: 0 }}>“Default” is the status new leads land in. Deleting a status leaves affected leads with no status.</p>
+        </div>
+
+        <div className="card">
+          <div className="section-title">Call dispositions</div>
+          <div className="table-wrap">
+            <table className="data">
+              <thead><tr><th>Name</th><th>Advances status to</th><th>Active</th><th></th></tr></thead>
+              <tbody>
+                {disps.map((d) => (
+                  <tr key={d.id}>
+                    <td><input value={d.name} onChange={(e) => editDisp(d.id, { name: e.target.value })} /></td>
+                    <td>
+                      <select value={d.maps_to_status_id || ''} onChange={(e) => editDisp(d.id, { maps_to_status_id: e.target.value })}>
+                        <option value="">— none —</option>
+                        {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </td>
+                    <td><input type="checkbox" checked={!!d.is_active} onChange={(e) => editDisp(d.id, { is_active: e.target.checked })} /></td>
+                    <td><div className="row-actions">
+                      <button className="btn-ghost btn-sm" onClick={() => saveDisp(d)}>Save</button>
+                      <button className="btn-ghost btn-sm" onClick={() => delDisp(d.id)}>Delete</button>
+                    </div></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <form className="filters" style={{ marginTop: 12 }} onSubmit={addDisp}>
+            <input type="text" placeholder="New disposition name" value={newDisp.name} onChange={(e) => setNewDisp({ ...newDisp, name: e.target.value })} required />
+            <select value={newDisp.maps_to_status_id} onChange={(e) => setNewDisp({ ...newDisp, maps_to_status_id: e.target.value })}>
+              <option value="">Advances to… (optional)</option>
+              {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+            <button className="btn" type="submit">Add disposition</button>
+          </form>
+        </div>
+      </div>
+    </Layout>
+  );
+}

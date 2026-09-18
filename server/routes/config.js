@@ -10,10 +10,54 @@ r.get('/statuses', async (req, res) => {
   res.json(data);
 });
 
+r.post('/statuses', async (req, res) => {
+  const body = { name: req.body.name, sort_order: req.body.sort_order ?? 0, is_active: req.body.is_active ?? true, is_default: !!req.body.is_default };
+  if (body.is_default) await req.sb.from('lead_statuses').update({ is_default: false }).eq('is_default', true);
+  const { data, error } = await req.sb.from('lead_statuses').insert(body).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+r.patch('/statuses/:id', async (req, res) => {
+  const patch = {};
+  for (const k of ['name', 'sort_order', 'is_active', 'is_default']) if (k in req.body) patch[k] = req.body[k];
+  if (patch.is_default) await req.sb.from('lead_statuses').update({ is_default: false }).neq('id', req.params.id);
+  const { data, error } = await req.sb.from('lead_statuses').update(patch).eq('id', req.params.id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+r.delete('/statuses/:id', async (req, res) => {
+  const { error } = await req.sb.from('lead_statuses').delete().eq('id', req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(204).end();
+});
+
 r.get('/dispositions', async (req, res) => {
   const { data, error } = await req.sb.from('call_dispositions').select('*').order('name');
   if (error) return res.status(400).json({ error: error.message });
   res.json(data);
+});
+
+r.post('/dispositions', async (req, res) => {
+  const body = { name: req.body.name, maps_to_status_id: req.body.maps_to_status_id || null, is_active: req.body.is_active ?? true };
+  const { data, error } = await req.sb.from('call_dispositions').insert(body).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+r.patch('/dispositions/:id', async (req, res) => {
+  const patch = {};
+  for (const k of ['name', 'maps_to_status_id', 'is_active']) if (k in req.body) patch[k] = req.body[k];
+  const { data, error } = await req.sb.from('call_dispositions').update(patch).eq('id', req.params.id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+r.delete('/dispositions/:id', async (req, res) => {
+  const { error } = await req.sb.from('call_dispositions').delete().eq('id', req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(204).end();
 });
 
 r.get('/agents', async (req, res) => {

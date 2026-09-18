@@ -3,11 +3,13 @@ import { supabase } from '../supabaseClient';
 
 const NAV = [
   { to: '/', label: 'Dashboard' },
+  { to: '/queue', label: 'My Queue' },
   { to: '/leads', label: 'Leads' },
   { to: '/schedule', label: 'Schedule' },
   { to: '/reports', label: 'Reports' },
   { to: '/sources', label: 'Sources' },
-  { to: '/users', label: 'Users' }
+  { to: '/users', label: 'Users' },
+  { to: '/settings', label: 'Settings' }
 ];
 
 export default function Layout({ children }) {

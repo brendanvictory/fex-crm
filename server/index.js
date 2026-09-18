@@ -10,6 +10,7 @@ import ingestRouter from './routes/ingest.js';
 import usersRouter from './routes/users.js';
 import reportsRouter from './routes/reports.js';
 import callbacksRouter from './routes/callbacks.js';
+import queueRouter from './routes/queue.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -38,6 +39,7 @@ app.use('/api/config', requireAuth, configRouter);
 app.use('/api/users', requireAuth, usersRouter);
 app.use('/api/reports', requireAuth, reportsRouter);
 app.use('/api/callbacks', requireAuth, callbacksRouter);
+app.use('/api/queue', requireAuth, queueRouter);
 
 // ---------------------------------------------------------------------------
 // Serve the built React app
