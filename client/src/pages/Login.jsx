@@ -5,27 +5,33 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
 
   async function signIn(e) {
     e.preventDefault();
-    setErr('');
+    setErr(''); setBusy(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) setErr(error.message);
+    setBusy(false);
   }
 
   return (
-    <div style={{ maxWidth: 320, margin: '80px auto', fontFamily: 'system-ui' }}>
-      <h1>FEX CRM</h1>
-      <form onSubmit={signIn}>
-        <input placeholder="Email" value={email}
-               onChange={e => setEmail(e.target.value)}
-               style={{ display: 'block', width: '100%', margin: '8px 0', padding: 8 }} />
-        <input placeholder="Password" type="password" value={password}
-               onChange={e => setPassword(e.target.value)}
-               style={{ display: 'block', width: '100%', margin: '8px 0', padding: 8 }} />
-        <button type="submit" style={{ padding: '8px 16px' }}>Sign in</button>
-      </form>
-      {err && <p style={{ color: 'crimson' }}>{err}</p>}
+    <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg)' }}>
+      <div className="card" style={{ width: 340 }}>
+        <img src="/coverwise-logo.png" alt="Coverwise" style={{ height: 34, display: 'block', margin: '4px auto 20px' }} />
+        <form onSubmit={signIn} className="stack">
+          <div className="field">
+            <label>Email</label>
+            <input value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
+          </div>
+          <div className="field">
+            <label>Password</label>
+            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" />
+          </div>
+          <button className="btn" type="submit" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+        </form>
+        {err && <p className="error" style={{ marginBottom: 0 }}>{err}</p>}
+      </div>
     </div>
   );
 }

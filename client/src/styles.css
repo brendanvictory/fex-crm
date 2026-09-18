@@ -1,0 +1,117 @@
+/* Coverwise brand theme */
+:root {
+  --navy: #000077;
+  --navy-700: #1a1a8c;
+  --sky: #98dcf5;
+  --sky-50: #eef9fe;
+  --sky-100: #d9f1fb;
+  --ink: #1f2430;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --bg: #f6f7fb;
+  --white: #ffffff;
+  --danger: #c0392b;
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+a { color: var(--navy); text-decoration: none; }
+
+/* ---- Top bar ---- */
+.topbar { background: var(--white); border-bottom: 1px solid var(--line); }
+.topbar-inner {
+  max-width: 1200px; margin: 0 auto; padding: 0 20px;
+  height: 60px; display: flex; align-items: center; gap: 28px;
+}
+.brand-logo { height: 30px; width: auto; display: block; }
+.nav { display: flex; gap: 6px; margin-left: 8px; }
+.nav-link {
+  padding: 8px 14px; border-radius: 8px; color: var(--muted); font-weight: 600; font-size: 14px;
+}
+.nav-link:hover { background: var(--sky-50); color: var(--navy); }
+.nav-link.active { background: var(--sky-100); color: var(--navy); }
+.topbar .spacer { flex: 1; }
+
+/* ---- Layout ---- */
+.content { max-width: 1200px; margin: 0 auto; padding: 28px 20px 64px; }
+.page-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.page-head h1 { margin: 0; font-size: 24px; color: var(--navy); }
+
+/* ---- Buttons ---- */
+.btn {
+  background: var(--navy); color: #fff; border: none; padding: 9px 16px;
+  border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;
+}
+.btn:hover { background: var(--navy-700); }
+.btn-ghost {
+  background: transparent; color: var(--navy); border: 1px solid var(--line);
+  padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; cursor: pointer;
+}
+.btn-ghost:hover { border-color: var(--navy); }
+
+/* ---- Cards ---- */
+.card {
+  background: var(--white); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: 20px;
+}
+
+/* ---- Filters ---- */
+.filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+.filters input, .filters select {
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: #fff;
+}
+.filters input[type="text"] { min-width: 220px; }
+
+/* ---- Table ---- */
+.table-wrap { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+table.data { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.data th {
+  text-align: left; padding: 12px 14px; background: var(--sky-50);
+  color: var(--navy); font-weight: 700; border-bottom: 1px solid var(--line); white-space: nowrap;
+}
+table.data td { padding: 12px 14px; border-bottom: 1px solid var(--line); }
+table.data tbody tr { cursor: pointer; }
+table.data tbody tr:hover { background: var(--sky-50); }
+table.data tbody tr:last-child td { border-bottom: none; }
+
+.badge {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  background: var(--sky-100); color: var(--navy); font-size: 12px; font-weight: 600;
+}
+
+/* ---- Forms ---- */
+.form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field.full { grid-column: 1 / -1; }
+.field label { font-size: 13px; font-weight: 600; color: var(--muted); }
+.field input, .field select, .field textarea {
+  padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; background: #fff;
+}
+.field textarea { min-height: 80px; resize: vertical; }
+.section-title {
+  font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--navy); margin: 8px 0 4px;
+}
+.checkbox-row { display: flex; align-items: center; gap: 8px; }
+.checkbox-row input { width: 16px; height: 16px; }
+
+/* ---- Misc ---- */
+.muted { color: var(--muted); }
+.error { color: var(--danger); }
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.row-actions { display: flex; gap: 10px; }
+.timeline { list-style: none; padding: 0; margin: 0; }
+.timeline li { padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.timeline li:last-child { border-bottom: none; }
+.timeline .when { color: var(--muted); font-size: 12px; }
+
+@media (max-width: 680px) {
+  .form-grid { grid-template-columns: 1fr; }
+}
