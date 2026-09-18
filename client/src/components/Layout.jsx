@@ -3,7 +3,8 @@ import { supabase } from '../supabaseClient';
 
 const NAV = [
   { to: '/', label: 'Dashboard' },
-  { to: '/leads', label: 'Leads' }
+  { to: '/leads', label: 'Leads' },
+  { to: '/sources', label: 'Sources' }
 ];
 
 export default function Layout({ children }) {
@@ -12,25 +13,25 @@ export default function Layout({ children }) {
     to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(to);
 
   return (
-    <div>
-      <header className="topbar">
-        <div className="topbar-inner">
-          <img src="/coverwise-logo.png" alt="Coverwise" className="brand-logo" />
-          <nav className="nav">
-            {NAV.map((n) => (
-              <Link key={n.to} to={n.to}
-                className={'nav-link' + (isActive(n.to) ? ' active' : '')}>
-                {n.label}
-              </Link>
-            ))}
-          </nav>
-          <span className="spacer" />
-          <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>
-            Sign out
-          </button>
-        </div>
-      </header>
-      <main className="content">{children}</main>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <img src="/coverwise-logo.png" alt="Coverwise" className="brand-logo" />
+        <nav className="side-nav">
+          {NAV.map((n) => (
+            <Link key={n.to} to={n.to}
+              className={'side-link' + (isActive(n.to) ? ' active' : '')}>
+              {n.label}
+            </Link>
+          ))}
+        </nav>
+        <span className="spacer" />
+        <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>
+          Sign out
+        </button>
+      </aside>
+      <div className="main">
+        <main className="content">{children}</main>
+      </div>
     </div>
   );
 }

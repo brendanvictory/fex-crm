@@ -5,6 +5,8 @@ import Login from './pages/Login.jsx';
 import Dashboard from './pages/Dashboard.jsx';
 import Leads from './pages/Leads.jsx';
 import LeadDetail from './pages/LeadDetail.jsx';
+import BulkUpload from './pages/BulkUpload.jsx';
+import Sources from './pages/Sources.jsx';
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = still loading
@@ -30,7 +32,9 @@ export default function App() {
       <Route path="/login" element={<Navigate to="/" />} />
       <Route path="/" element={<Dashboard />} />
       <Route path="/leads" element={<Leads />} />
+      <Route path="/leads/import" element={<BulkUpload />} />
       <Route path="/leads/:id" element={<LeadDetail />} />
+      <Route path="/sources" element={<Sources />} />
       <Route path="*" element={<Navigate to="/" />} />
     </Routes>
   );

@@ -42,7 +42,10 @@ export default function Leads() {
     <Layout>
       <div className="page-head">
         <h1>Leads</h1>
-        <button className="btn" onClick={() => navigate('/leads/new')}>+ New Lead</button>
+        <div className="row-actions">
+          <button className="btn-ghost" onClick={() => navigate('/leads/import')}>Bulk Upload</button>
+          <button className="btn" onClick={() => navigate('/leads/new')}>+ New Lead</button>
+        </div>
       </div>
 
       <div className="filters">
@@ -80,7 +83,7 @@ export default function Leads() {
             ) : leads.length === 0 ? (
               <tr><td colSpan={7} className="muted">No leads yet. Click “New Lead” to add one.</td></tr>
             ) : leads.map((l) => (
-              <tr key={l.id} onClick={() => navigate(`/leads/${l.id}`)}>
+              <tr key={l.id} className="clickable" onClick={() => navigate(`/leads/${l.id}`)}>
                 <td>{fullName(l)}</td>
                 <td>{l.phone || ''}</td>
                 <td>{l.state || ''}</td>

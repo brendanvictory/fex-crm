@@ -1,9 +1,9 @@
 import { Router } from 'express';
+import { normalizeRecord, prepareLead } from '../lib/leads.js';
 
 const r = Router();
 
 // GET /api/leads  — list, with optional filters. RLS decides what's visible.
-//   ?status= &source= &owner= &state= &from= &to= &search=
 r.get('/', async (req, res) => {
   const { status, source, owner, state, from, to, search } = req.query;
   let q = req.sb
@@ -20,9 +20,7 @@ r.get('/', async (req, res) => {
   if (to) q = q.lte('created_at', to);
   if (search) {
     const s = search.replace(/[%,]/g, '');
-    q = q.or(
-      `first_name.ilike.%${s}%,last_name.ilike.%${s}%,phone.ilike.%${s}%,email.ilike.%${s}%`
-    );
+    q = q.or(`first_name.ilike.%${s}%,last_name.ilike.%${s}%,phone.ilike.%${s}%,email.ilike.%${s}%`);
   }
 
   const { data, error } = await q;
@@ -30,31 +28,62 @@ r.get('/', async (req, res) => {
   res.json(data);
 });
 
+// POST /api/leads/bulk — CSV bulk upload. Body: { rows: [...], source_id? }.
+// Uses the same dedupe/assignment path as the ingest API.
+r.post('/bulk', async (req, res) => {
+  const { rows, source_id } = req.body;
+  if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
+
+  const { data: me, error: meErr } = await req.sb
+    .from('users').select('org_id').eq('id', req.user.id).single();
+  if (meErr) return res.status(400).json({ error: meErr.message });
+
+  let source = null;
+  if (source_id) {
+    const { data: s } = await req.sb.from('lead_sources').select('*').eq('id', source_id).maybeSingle();
+    source = s;
+  }
+
+  let created = 0, duplicates = 0;
+  const errors = [];
+  for (let i = 0; i < rows.length; i++) {
+    try {
+      const input = normalizeRecord(rows[i]);
+      const { record, duplicate } = await prepareLead(req.sb, source, input, me.org_id);
+      if (duplicate) { duplicates++; continue; }
+      const { data, error } = await req.sb.from('leads').insert(record).select('id').single();
+      if (error) { errors.push({ row: i + 1, error: error.message }); continue; }
+      created++;
+      await req.sb.from('activity_log').insert({
+        org_id: me.org_id, entity_type: 'lead', entity_id: data.id,
+        actor_id: req.user.id, action: 'created', detail: { via: 'bulk_upload' }
+      });
+    } catch (e) {
+      errors.push({ row: i + 1, error: e.message });
+    }
+  }
+  res.json({ total: rows.length, created, duplicates, errors });
+});
+
 // GET /api/leads/:id
 r.get('/:id', async (req, res) => {
   const { data, error } = await req.sb
-    .from('leads')
-    .select('*')
-    .eq('id', req.params.id)
-    .single();
+    .from('leads').select('*').eq('id', req.params.id).single();
   if (error) return res.status(404).json({ error: error.message });
   res.json(data);
 });
 
-// GET /api/leads/:id/activity — the lead's timeline.
+// GET /api/leads/:id/activity
 r.get('/:id/activity', async (req, res) => {
   const { data, error } = await req.sb
-    .from('activity_log')
-    .select('*')
-    .eq('entity_type', 'lead')
-    .eq('entity_id', req.params.id)
-    .order('created_at', { ascending: false })
-    .limit(200);
+    .from('activity_log').select('*')
+    .eq('entity_type', 'lead').eq('entity_id', req.params.id)
+    .order('created_at', { ascending: false }).limit(200);
   if (error) return res.status(400).json({ error: error.message });
   res.json(data);
 });
 
-// POST /api/leads — create. org_id comes from the creator; default status applied.
+// POST /api/leads — create one from the UI.
 r.post('/', async (req, res) => {
   const { data: me, error: meErr } = await req.sb
     .from('users').select('org_id').eq('id', req.user.id).single();
@@ -62,7 +91,6 @@ r.post('/', async (req, res) => {
 
   const body = { ...req.body, org_id: me.org_id };
   delete body.id;
-
   if (!body.status_id) {
     const { data: st } = await req.sb
       .from('lead_statuses').select('id').eq('is_default', true).limit(1).maybeSingle();
@@ -71,7 +99,6 @@ r.post('/', async (req, res) => {
 
   const { data, error } = await req.sb.from('leads').insert(body).select().single();
   if (error) return res.status(400).json({ error: error.message });
-
   await req.sb.from('activity_log').insert({
     org_id: me.org_id, entity_type: 'lead', entity_id: data.id,
     actor_id: req.user.id, action: 'created'
@@ -79,7 +106,7 @@ r.post('/', async (req, res) => {
   res.json(data);
 });
 
-// PATCH /api/leads/:id — update any fields. Logs the change.
+// PATCH /api/leads/:id
 r.patch('/:id', async (req, res) => {
   const patch = { ...req.body, updated_at: new Date().toISOString() };
   delete patch.id;
@@ -88,7 +115,6 @@ r.patch('/:id', async (req, res) => {
   const { data, error } = await req.sb
     .from('leads').update(patch).eq('id', req.params.id).select().single();
   if (error) return res.status(400).json({ error: error.message });
-
   await req.sb.from('activity_log').insert({
     org_id: data.org_id, entity_type: 'lead', entity_id: data.id,
     actor_id: req.user.id, action: 'updated', detail: req.body
