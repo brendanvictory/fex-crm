@@ -1,38 +1,58 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import { api } from '../api';
 
+const COLORS = ['#3b5bff', '#f59e0b', '#8b5cf6', '#ec4899', '#17ad72', '#06b6d4', '#e5484d', '#14b8a6'];
 const name = (l) => l ? [l.first_name, l.last_name].filter(Boolean).join(' ') || l.phone || 'Lead' : 'Lead';
 const tel = (p) => (p ? String(p).replace(/[^0-9+]/g, '') : '');
 
 export default function Queue() {
   const navigate = useNavigate();
+  const [statuses, setStatuses] = useState([]);
   const [q, setQ] = useState(null);
+  const [drag, setDrag] = useState(null);        // { id, unclaimed }
+  const [over, setOver] = useState(null);        // column key being hovered
   const [err, setErr] = useState('');
 
   async function load() {
-    try { setQ(await api('/queue')); } catch (e) { setErr(e.message); }
+    try {
+      const [s, queue] = await Promise.all([api('/config/statuses'), api('/queue')]);
+      setStatuses(s.filter((x) => x.is_active));
+      setQ(queue);
+    } catch (e) { setErr(e.message); }
   }
   useEffect(() => { load(); }, []);
 
-  async function claim(id) {
-    try { await api(`/queue/claim/${id}`, { method: 'POST' }); load(); }
-    catch (e) { setErr(e.message); }
-  }
+  const dueSet = useMemo(() => new Set((q?.due || []).map((c) => c.lead?.id).filter(Boolean)), [q]);
 
-  const Row = ({ lead, when, actions }) => (
-    <tr className="clickable" onClick={() => navigate(`/leads/${lead.id}`)}>
-      <td>{name(lead)}</td>
-      <td onClick={(e) => e.stopPropagation()}>
-        {lead.phone ? <a href={`tel:${tel(lead.phone)}`}>{lead.phone}</a> : <span className="muted">—</span>}
-      </td>
-      <td>{lead.state || ''}</td>
-      <td>{lead.lead_statuses?.name ? <span className="badge">{lead.lead_statuses.name}</span> : ''}</td>
-      <td>{when || ''}</td>
-      <td onClick={(e) => e.stopPropagation()}>{actions}</td>
-    </tr>
-  );
+  // Build columns: Unclaimed first, then each active status.
+  const columns = useMemo(() => {
+    if (!q) return [];
+    const statusCols = statuses.map((s, i) => ({
+      key: s.id, title: s.name, color: COLORS[i % COLORS.length], status_id: s.id, cards: []
+    }));
+    const byId = Object.fromEntries(statusCols.map((c) => [c.status_id, c]));
+    for (const l of q.leads) {
+      const col = byId[l.status_id] || statusCols[0];
+      if (col) col.cards.push({ ...l, unclaimed: false });
+    }
+    const unclaimed = {
+      key: 'unclaimed', title: 'Unclaimed', color: '#000077', status_id: null,
+      cards: (q.available || []).map((l) => ({ ...l, unclaimed: true }))
+    };
+    return [unclaimed, ...statusCols];
+  }, [q, statuses]);
+
+  async function drop(col) {
+    setOver(null);
+    if (!drag || col.status_id == null) { setDrag(null); return; } // can't drop back into Unclaimed
+    const item = drag; setDrag(null);
+    try {
+      await api(`/leads/${item.id}/move`, { method: 'POST', body: JSON.stringify({ status_id: col.status_id, claim: item.unclaimed }) });
+      load();
+    } catch (e) { setErr(e.message); }
+  }
 
   return (
     <Layout>
@@ -41,51 +61,37 @@ export default function Queue() {
         <button className="btn-ghost" onClick={load}>Refresh</button>
       </div>
       {err && <p className="error">{err}</p>}
+      <p className="muted" style={{ marginTop: -8 }}>Drag a lead across stages to update its status. Drag from <strong>Unclaimed</strong> to claim it to yourself.</p>
+
       {!q ? <p className="muted">Loading…</p> : (
-        <div className="stack">
-          <div className="table-wrap">
-            <table className="data">
-              <thead><tr><th colSpan={6} style={{ background: 'var(--navy)', color: '#fff' }}>Due now — callbacks ({q.due.length})</th></tr>
-                <tr><th>Name</th><th>Phone</th><th>State</th><th>Status</th><th>Scheduled</th><th></th></tr></thead>
-              <tbody>
-                {q.due.length === 0 ? <tr><td colSpan={6} className="muted">Nothing due.</td></tr>
-                  : q.due.map((c) => c.lead && (
-                    <Row key={c.id} lead={c.lead}
-                      when={new Date(c.scheduled_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                      actions={<button className="btn-ghost btn-sm" onClick={() => navigate(`/leads/${c.lead.id}`)}>Work</button>} />
-                  ))}
-              </tbody>
-            </table>
-          </div>
-
-          <div className="table-wrap">
-            <table className="data">
-              <thead><tr><th colSpan={6} style={{ background: 'var(--navy)', color: '#fff' }}>My leads to work ({q.leads.length})</th></tr>
-                <tr><th>Name</th><th>Phone</th><th>State</th><th>Status</th><th></th><th></th></tr></thead>
-              <tbody>
-                {q.leads.length === 0 ? <tr><td colSpan={6} className="muted">No leads assigned to you.</td></tr>
-                  : q.leads.map((l) => (
-                    <Row key={l.id} lead={l} when=""
-                      actions={<button className="btn-ghost btn-sm" onClick={() => navigate(`/leads/${l.id}`)}>Work</button>} />
-                  ))}
-              </tbody>
-            </table>
-          </div>
-
-          {q.available.length > 0 && (
-            <div className="table-wrap">
-              <table className="data">
-                <thead><tr><th colSpan={6} style={{ background: 'var(--sky-100)', color: 'var(--navy)' }}>Available to claim ({q.available.length})</th></tr>
-                  <tr><th>Name</th><th>Phone</th><th>State</th><th>Status</th><th></th><th></th></tr></thead>
-                <tbody>
-                  {q.available.map((l) => (
-                    <Row key={l.id} lead={l} when=""
-                      actions={<button className="btn btn-sm" onClick={() => claim(l.id)}>Claim</button>} />
-                  ))}
-                </tbody>
-              </table>
+        <div className="kanban">
+          {columns.map((col) => (
+            <div key={col.key}
+              className={'kanban-col' + (over === col.key ? ' dragover' : '')}
+              onDragOver={(e) => { if (col.status_id != null) { e.preventDefault(); setOver(col.key); } }}
+              onDragLeave={() => setOver((o) => (o === col.key ? null : o))}
+              onDrop={() => drop(col)}>
+              <div className="kanban-head">
+                <span className="kanban-title"><span className="kanban-dot" style={{ background: col.color }} />{col.title}</span>
+                <span className="kanban-count">{col.cards.length}</span>
+              </div>
+              {col.cards.map((c) => (
+                <div key={c.id} className="kanban-card" draggable
+                  onDragStart={() => setDrag({ id: c.id, unclaimed: c.unclaimed })}
+                  onDragEnd={() => { setDrag(null); setOver(null); }}
+                  onClick={() => navigate(`/leads/${c.id}`)}>
+                  <div className="kc-name">{name(c)}</div>
+                  <div className="kc-meta">
+                    {c.phone && <a href={`tel:${tel(c.phone)}`} onClick={(e) => e.stopPropagation()}>{c.phone}</a>}
+                    {c.state && <span>{c.state}</span>}
+                    {dueSet.has(c.id) && <span className="pill-due">Due</span>}
+                    {c.unclaimed && <span className="pill-claim">Claim</span>}
+                  </div>
+                </div>
+              ))}
+              {col.cards.length === 0 && <div className="muted" style={{ padding: '4px 10px', fontSize: 12 }}>—</div>}
             </div>
-          )}
+          ))}
         </div>
       )}
     </Layout>

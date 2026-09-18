@@ -125,4 +125,45 @@ r.patch('/:id', async (req, res) => {
   res.json(data);
 });
 
+// POST /api/leads/:id/move — kanban move: change status and/or claim.
+// Trusted-key write with authorization enforced in code.
+r.post('/:id/move', async (req, res) => {
+  const { status_id, claim } = req.body;
+  const { data: me, error: me2 } = await supabaseAdmin
+    .from('users').select('id, role, org_id').eq('id', req.user.id).single();
+  if (me2) return res.status(400).json({ error: me2.message });
+
+  const { data: lead, error: le } = await supabaseAdmin
+    .from('leads').select('id, org_id, owner_id').eq('id', req.params.id).single();
+  if (le) return res.status(404).json({ error: le.message });
+  if (lead.org_id !== me.org_id && me.role !== 'super_admin')
+    return res.status(403).json({ error: 'out of scope' });
+
+  let allowed = ['super_admin', 'admin'].includes(me.role)
+    || lead.owner_id === me.id
+    || (claim && !lead.owner_id);
+  if (!allowed && me.role === 'manager' && lead.owner_id) {
+    const { data: ag } = await supabaseAdmin
+      .from('users').select('id').eq('id', lead.owner_id).eq('manager_id', me.id).maybeSingle();
+    allowed = !!ag;
+  }
+  if (!allowed) return res.status(403).json({ error: 'not permitted' });
+
+  const patch = { updated_at: new Date().toISOString() };
+  if (status_id) patch.status_id = status_id;
+  const claimed = claim && !lead.owner_id;
+  if (claimed) patch.owner_id = me.id;
+
+  const { data, error } = await supabaseAdmin
+    .from('leads').update(patch).eq('id', lead.id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  await supabaseAdmin.from('activity_log').insert({
+    org_id: lead.org_id, entity_type: 'lead', entity_id: lead.id,
+    actor_id: me.id, action: claimed ? 'claimed_and_moved' : 'status_changed',
+    detail: { status_id }
+  });
+  res.json(data);
+});
+
 export default r;

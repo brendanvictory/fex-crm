@@ -20,7 +20,9 @@ export default function Layout({ children }) {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <img src="/coverwise-logo.png" alt="Coverwise" className="brand-logo" />
+        <div className="brand-chip">
+          <img src="/coverwise-logo.png" alt="Coverwise" />
+        </div>
         <nav className="side-nav">
           {NAV.map((n) => (
             <Link key={n.to} to={n.to}
