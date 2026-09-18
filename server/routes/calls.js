@@ -33,40 +33,75 @@ async function pickCallerId(orgId, state) {
   return any?.number || process.env.TWILIO_CALLER_ID || null;
 }
 
-// POST /api/calls/start — compliance gate + create the call record.
-// Returns { call_id, to, caller_id } or 403 with a reason.
+// GET /api/calls/numbers — caller-ID options for the agent's org (all roles).
+r.get('/numbers', async (req, res) => {
+  const { data: me } = await supabaseAdmin.from('users').select('org_id').eq('id', req.user.id).single();
+  const { data } = await supabaseAdmin.from('phone_numbers')
+    .select('id, number, state, label').eq('org_id', me.org_id).eq('is_active', true).order('state');
+  const list = data || [];
+  const def = process.env.TWILIO_CALLER_ID;
+  if (def && !list.find((n) => n.number === def)) list.unshift({ id: 'default', number: def, state: null, label: 'Default' });
+  res.json(list);
+});
+
+// Validate a caller-ID override belongs to the org (else fall back to auto-pick).
+async function resolveCaller(orgId, state, override) {
+  if (override) {
+    const { data } = await supabaseAdmin.from('phone_numbers')
+      .select('number').eq('org_id', orgId).eq('number', override).eq('is_active', true).maybeSingle();
+    if (data) return data.number;
+    if (override === process.env.TWILIO_CALLER_ID) return override;
+  }
+  return pickCallerId(orgId, state);
+}
+
+// POST /api/calls/start — start a call, either to a lead (with compliance gate)
+// or to a manually typed number. Body: { lead_id } OR { number }, plus optional
+// caller_id to override the local-presence pick. Returns { call_id, to, caller_id }.
 r.post('/start', async (req, res) => {
-  const { lead_id } = req.body;
-  if (!lead_id) return res.status(400).json({ error: 'lead_id required' });
-
+  const { lead_id, number, caller_id } = req.body;
   const { data: me } = await supabaseAdmin.from('users').select('id, org_id').eq('id', req.user.id).single();
-  const { data: lead } = await supabaseAdmin
-    .from('leads').select('id, phone, state, timezone, dnc, org_id').eq('id', lead_id).single();
-  if (!lead) return res.status(404).json({ error: 'lead not found' });
 
-  if (lead.dnc) return res.status(403).json({ error: 'This lead is on the Do Not Call list.', reason: 'dnc' });
+  if (lead_id) {
+    const { data: lead } = await supabaseAdmin
+      .from('leads').select('id, phone, state, timezone, dnc, org_id').eq('id', lead_id).single();
+    if (!lead) return res.status(404).json({ error: 'lead not found' });
+    if (lead.dnc) return res.status(403).json({ error: 'This lead is on the Do Not Call list.', reason: 'dnc' });
 
-  const tz = lead.timezone || stateTimezone(lead.state) || 'America/New_York';
-  const hour = localHour(tz);
-  if (hour != null && (hour < 8 || hour >= 21)) {
-    return res.status(403).json({
-      error: `Outside calling hours for this lead (it's ${hour}:00 their time). Calling is allowed 8am–9pm local.`,
-      reason: 'window'
-    });
+    const tz = lead.timezone || stateTimezone(lead.state) || 'America/New_York';
+    const hour = localHour(tz);
+    if (hour != null && (hour < 8 || hour >= 21)) {
+      return res.status(403).json({
+        error: `Outside calling hours for this lead (it's ${hour}:00 their time). Calling is allowed 8am–9pm local.`,
+        reason: 'window'
+      });
+    }
+    const to = toE164(lead.phone);
+    if (!to) return res.status(400).json({ error: 'This lead has no valid phone number.' });
+    const callerId = await resolveCaller(lead.org_id, lead.state, caller_id);
+
+    const { data: call, error } = await supabaseAdmin.from('calls').insert({
+      lead_id: lead.id, org_id: lead.org_id, agent_id: me.id,
+      direction: 'outbound', from_number: callerId, to_number: to, started_at: new Date().toISOString()
+    }).select('id').single();
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json({ call_id: call.id, to, caller_id: callerId });
   }
 
-  const to = toE164(lead.phone);
-  if (!to) return res.status(400).json({ error: 'This lead has no valid phone number.' });
+  if (number) {
+    const to = toE164(number);
+    if (!to) return res.status(400).json({ error: 'Enter a valid phone number.' });
+    const callerId = await resolveCaller(me.org_id, null, caller_id);
 
-  const callerId = await pickCallerId(lead.org_id, lead.state);
+    const { data: call, error } = await supabaseAdmin.from('calls').insert({
+      lead_id: null, org_id: me.org_id, agent_id: me.id,
+      direction: 'outbound', from_number: callerId, to_number: to, started_at: new Date().toISOString()
+    }).select('id').single();
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json({ call_id: call.id, to, caller_id: callerId });
+  }
 
-  const { data: call, error } = await supabaseAdmin.from('calls').insert({
-    lead_id: lead.id, org_id: lead.org_id, agent_id: me.id,
-    direction: 'outbound', from_number: callerId, to_number: to, started_at: new Date().toISOString()
-  }).select('id').single();
-  if (error) return res.status(400).json({ error: error.message });
-
-  res.json({ call_id: call.id, to, caller_id: callerId });
+  res.status(400).json({ error: 'lead_id or number required' });
 });
 
 // PATCH /api/calls/:id/disposition — log outcome; advance lead status if mapped.

@@ -1,5 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { useDialer } from '../dialer/DialerContext.jsx';
 
 const NAV = [
   { to: '/', label: 'Dashboard' },
@@ -14,6 +15,7 @@ const NAV = [
 
 export default function Layout({ children }) {
   const loc = useLocation();
+  const dialer = useDialer();
   const isActive = (to) =>
     to === '/' ? loc.pathname === '/' : loc.pathname.startsWith(to);
 
@@ -24,6 +26,7 @@ export default function Layout({ children }) {
           <img src="/coverwise-logo.png" alt="Coverwise" />
         </div>
         <nav className="side-nav">
+          <button className="side-link phone-link" onClick={() => dialer?.openPhone()}>Open Phone</button>
           {NAV.map((n) => (
             <Link key={n.to} to={n.to}
               className={'side-link' + (isActive(n.to) ? ' active' : '')}>

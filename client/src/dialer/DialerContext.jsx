@@ -18,7 +18,8 @@ export function DialerProvider({ children }) {
   const [muted, setMuted] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
-  const [dispoFor, setDispoFor] = useState(null); // { call_id, lead } after a call ends
+  const [dispoFor, setDispoFor] = useState(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const initDevice = useCallback(async () => {
     try {
@@ -46,22 +47,24 @@ export function DialerProvider({ children }) {
   const startTimer = () => { setSeconds(0); clearInterval(timerRef.current); timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000); };
   const stopTimer = () => clearInterval(timerRef.current);
 
-  const startCall = useCallback(async (leadObj) => {
+  const connect = useCallback(async ({ lead_id, number, caller_id, displayLead }) => {
     setError('');
     if (status === 'connecting' || status === 'in-call') return;
     const device = deviceRef.current || await initDevice();
     if (!device) return;
     try {
-      const res = await api('/calls/start', { method: 'POST', body: JSON.stringify({ lead_id: leadObj.id }) });
-      setLead(leadObj);
+      const body = lead_id ? { lead_id, caller_id } : { number, caller_id };
+      const res = await api('/calls/start', { method: 'POST', body: JSON.stringify(body) });
+      setLead(displayLead || null);
       setStatus('connecting');
       setMuted(false);
+      setPanelOpen(true);
       const call = await device.connect({ params: { To: res.to, callerId: res.caller_id || '', call_id: res.call_id } });
       callRef.current = call;
       call.on('accept', () => { setStatus('in-call'); startTimer(); });
       call.on('disconnect', () => {
         stopTimer(); setStatus('ended');
-        setDispoFor({ call_id: res.call_id, lead: leadObj });
+        setDispoFor({ call_id: res.call_id, lead: displayLead || { phone: res.to } });
         setLead(null); callRef.current = null;
       });
       call.on('cancel', () => { stopTimer(); setStatus('idle'); setLead(null); callRef.current = null; });
@@ -72,15 +75,22 @@ export function DialerProvider({ children }) {
     }
   }, [status, initDevice]);
 
+  const startCall = useCallback((leadObj, callerId) => connect({ lead_id: leadObj.id, caller_id: callerId, displayLead: leadObj }), [connect]);
+  const startManualCall = useCallback((number, callerId) => connect({ number, caller_id: callerId, displayLead: { phone: number } }), [connect]);
+
   const hangup = useCallback(() => { try { callRef.current?.disconnect(); } catch { /* ignore */ } }, []);
-  const toggleMute = useCallback(() => {
-    const c = callRef.current; if (!c) return;
-    const m = !muted; c.mute(m); setMuted(m);
-  }, [muted]);
+  const toggleMute = useCallback(() => { const c = callRef.current; if (!c) return; const m = !muted; c.mute(m); setMuted(m); }, [muted]);
+  const sendDigit = useCallback((d) => { try { callRef.current?.sendDigits(String(d)); } catch { /* ignore */ } }, []);
+  const openPhone = useCallback(() => setPanelOpen(true), []);
+  const closePhone = useCallback(() => { if (status === 'idle') setPanelOpen(false); }, [status]);
   const closeDispo = useCallback(() => { setDispoFor(null); setStatus('idle'); setMuted(false); setSeconds(0); }, []);
 
   return (
-    <Ctx.Provider value={{ ready, status, lead, leadLabel, muted, seconds, error, setError, startCall, hangup, toggleMute, dispoFor, closeDispo }}>
+    <Ctx.Provider value={{
+      ready, status, lead, leadLabel, muted, seconds, error, setError,
+      startCall, startManualCall, hangup, toggleMute, sendDigit,
+      dispoFor, closeDispo, panelOpen, openPhone, closePhone
+    }}>
       {children}
     </Ctx.Provider>
   );
