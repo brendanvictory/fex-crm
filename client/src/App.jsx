@@ -13,6 +13,8 @@ import Reports from './pages/Reports.jsx';
 import Schedule from './pages/Schedule.jsx';
 import Queue from './pages/Queue.jsx';
 import Settings from './pages/Settings.jsx';
+import { DialerProvider } from './dialer/DialerContext.jsx';
+import Softphone from './components/Softphone.jsx';
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = still loading
@@ -34,20 +36,23 @@ export default function App() {
   }
 
   return (
-    <Routes>
-      <Route path="/login" element={<Navigate to="/" />} />
-      <Route path="/" element={<Dashboard />} />
-      <Route path="/leads" element={<Leads />} />
-      <Route path="/leads/import" element={<BulkUpload />} />
-      <Route path="/leads/:id" element={<LeadDetail />} />
-      <Route path="/reports" element={<Reports />} />
-      <Route path="/schedule" element={<Schedule />} />
-      <Route path="/queue" element={<Queue />} />
-      <Route path="/settings" element={<Settings />} />
-      <Route path="/sources" element={<Sources />} />
-      <Route path="/users" element={<Users />} />
-      <Route path="/users/:id" element={<UserDetail />} />
-      <Route path="*" element={<Navigate to="/" />} />
-    </Routes>
+    <DialerProvider>
+      <Routes>
+        <Route path="/login" element={<Navigate to="/" />} />
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/leads" element={<Leads />} />
+        <Route path="/leads/import" element={<BulkUpload />} />
+        <Route path="/leads/:id" element={<LeadDetail />} />
+        <Route path="/reports" element={<Reports />} />
+        <Route path="/schedule" element={<Schedule />} />
+        <Route path="/queue" element={<Queue />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/sources" element={<Sources />} />
+        <Route path="/users" element={<Users />} />
+        <Route path="/users/:id" element={<UserDetail />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+      <Softphone />
+    </DialerProvider>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import { api } from '../api';
+import { useDialer } from '../dialer/DialerContext.jsx';
 
 const COLORS = ['#3b5bff', '#f59e0b', '#8b5cf6', '#ec4899', '#17ad72', '#06b6d4', '#e5484d', '#14b8a6'];
 const name = (l) => l ? [l.first_name, l.last_name].filter(Boolean).join(' ') || l.phone || 'Lead' : 'Lead';
@@ -9,6 +10,7 @@ const tel = (p) => (p ? String(p).replace(/[^0-9+]/g, '') : '');
 
 export default function Queue() {
   const navigate = useNavigate();
+  const dialer = useDialer();
   const [statuses, setStatuses] = useState([]);
   const [q, setQ] = useState(null);
   const [drag, setDrag] = useState(null);        // { id, unclaimed }
@@ -82,7 +84,10 @@ export default function Queue() {
                   onClick={() => navigate(`/leads/${c.id}`)}>
                   <div className="kc-name">{name(c)}</div>
                   <div className="kc-meta">
-                    {c.phone && <a href={`tel:${tel(c.phone)}`} onClick={(e) => e.stopPropagation()}>{c.phone}</a>}
+                    {c.phone && (
+                      <button className="call-btn btn-sm" style={{ padding: '3px 10px' }}
+                        onClick={(e) => { e.stopPropagation(); dialer.startCall(c); }}>Call</button>
+                    )}
                     {c.state && <span>{c.state}</span>}
                     {dueSet.has(c.id) && <span className="pill-due">Due</span>}
                     {c.unclaimed && <span className="pill-claim">Claim</span>}

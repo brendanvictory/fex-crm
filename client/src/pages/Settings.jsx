@@ -5,16 +5,25 @@ import { api } from '../api';
 export default function Settings() {
   const [statuses, setStatuses] = useState([]);
   const [disps, setDisps] = useState([]);
+  const [numbers, setNumbers] = useState([]);
   const [err, setErr] = useState('');
   const [newStatus, setNewStatus] = useState({ name: '', sort_order: 0 });
   const [newDisp, setNewDisp] = useState({ name: '', maps_to_status_id: '' });
+  const [newNum, setNewNum] = useState({ number: '', state: '', label: '' });
 
   async function load() {
     try {
-      const [s, d] = await Promise.all([api('/config/statuses'), api('/config/dispositions')]);
-      setStatuses(s); setDisps(d);
+      const [s, d, n] = await Promise.all([api('/config/statuses'), api('/config/dispositions'), api('/config/numbers')]);
+      setStatuses(s); setDisps(d); setNumbers(n);
     } catch (e) { setErr(e.message); }
   }
+
+  async function addNumber(e) {
+    e.preventDefault();
+    try { await api('/config/numbers', { method: 'POST', body: JSON.stringify(newNum) }); setNewNum({ number: '', state: '', label: '' }); load(); }
+    catch (e) { setErr(e.message); }
+  }
+  async function delNumber(id) { try { await api(`/config/numbers/${id}`, { method: 'DELETE' }); load(); } catch (e) { setErr(e.message); } }
   useEffect(() => { load(); }, []);
 
   const editStatus = (id, patch) => setStatuses((rows) => rows.map((r) => r.id === id ? { ...r, ...patch } : r));
@@ -109,6 +118,34 @@ export default function Settings() {
               {statuses.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
             <button className="btn" type="submit">Add disposition</button>
+          </form>
+        </div>
+
+        <div className="card">
+          <div className="section-title">Phone numbers (local-presence caller ID)</div>
+          <p className="muted" style={{ marginTop: 0 }}>Add your Twilio numbers here. A lead in a given state is dialed from the number matching that state; a number with no state is the fallback.</p>
+          <div className="table-wrap">
+            <table className="data">
+              <thead><tr><th>Number</th><th>State</th><th>Label</th><th>Active</th><th></th></tr></thead>
+              <tbody>
+                {numbers.length === 0 ? <tr><td colSpan={5} className="muted">No numbers yet.</td></tr>
+                  : numbers.map((n) => (
+                    <tr key={n.id}>
+                      <td><code className="key">{n.number}</code></td>
+                      <td>{n.state || <span className="muted">default</span>}</td>
+                      <td>{n.label || ''}</td>
+                      <td>{n.is_active ? 'Yes' : 'No'}</td>
+                      <td><button className="btn-ghost btn-sm" onClick={() => delNumber(n.id)}>Delete</button></td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+          <form className="filters" style={{ marginTop: 12 }} onSubmit={addNumber}>
+            <input type="text" placeholder="+1 516 555 1234" value={newNum.number} onChange={(e) => setNewNum({ ...newNum, number: e.target.value })} required />
+            <input type="text" placeholder="State (blank = default)" maxLength={2} style={{ width: 160 }} value={newNum.state} onChange={(e) => setNewNum({ ...newNum, state: e.target.value })} />
+            <input type="text" placeholder="Label (optional)" value={newNum.label} onChange={(e) => setNewNum({ ...newNum, label: e.target.value })} />
+            <button className="btn" type="submit">Add number</button>
           </form>
         </div>
       </div>

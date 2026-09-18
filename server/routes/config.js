@@ -3,6 +3,16 @@ import { randomBytes } from 'crypto';
 
 const r = Router();
 
+function toE164(raw) {
+  if (!raw) return null;
+  const d = String(raw).replace(/[^\d+]/g, '');
+  if (d.startsWith('+')) return d;
+  const digits = d.replace(/\D/g, '');
+  if (digits.length === 10) return '+1' + digits;
+  if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
+  return digits ? '+' + digits : null;
+}
+
 // ---- Lookup data for dropdowns (all respect RLS via req.sb) ----
 r.get('/statuses', async (req, res) => {
   const { data, error } = await req.sb.from('lead_statuses').select('*').order('sort_order');
@@ -102,6 +112,36 @@ r.post('/sources/:id/rotate-key', async (req, res) => {
     .from('lead_sources').update({ api_key: key }).eq('id', req.params.id).select().single();
   if (error) return res.status(400).json({ error: error.message });
   res.json(data);
+});
+
+// ---- Twilio phone numbers (local-presence caller IDs) ----
+r.get('/numbers', async (req, res) => {
+  const { data, error } = await req.sb.from('phone_numbers').select('*').order('state');
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+r.post('/numbers', async (req, res) => {
+  const { data: me, error: meErr } = await req.sb
+    .from('users').select('org_id').eq('id', req.user.id).single();
+  if (meErr) return res.status(400).json({ error: meErr.message });
+  const row = {
+    org_id: me.org_id,
+    number: toE164(req.body.number),
+    state: req.body.state ? String(req.body.state).toUpperCase().slice(0, 2) : null,
+    label: req.body.label || null,
+    is_active: req.body.is_active ?? true
+  };
+  if (!row.number) return res.status(400).json({ error: 'valid number required' });
+  const { data, error } = await req.sb.from('phone_numbers').insert(row).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+});
+
+r.delete('/numbers/:id', async (req, res) => {
+  const { error } = await req.sb.from('phone_numbers').delete().eq('id', req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(204).end();
 });
 
 export default r;

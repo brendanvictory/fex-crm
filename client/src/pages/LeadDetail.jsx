@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import { api } from '../api';
+import { useDialer } from '../dialer/DialerContext.jsx';
 
 const BLANK = {
   first_name: '', last_name: '', phone: '', email: '',
@@ -30,6 +31,7 @@ function clean(form) {
 export default function LeadDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const dialer = useDialer();
   const isNew = id === 'new';
 
   const [form, setForm] = useState(BLANK);
@@ -93,7 +95,15 @@ export default function LeadDetail() {
     <Layout>
       <div className="page-head">
         <h1>{isNew ? 'New Lead' : [form.first_name, form.last_name].filter(Boolean).join(' ') || 'Lead'}</h1>
-        <button className="btn-ghost" onClick={() => navigate('/leads')}>← Back to Leads</button>
+        <div className="row-actions">
+          {!isNew && form.phone && (
+            <button className="call-btn" disabled={dialer?.status === 'in-call' || dialer?.status === 'connecting'}
+              onClick={() => dialer.startCall({ id, first_name: form.first_name, last_name: form.last_name, phone: form.phone })}>
+              Call
+            </button>
+          )}
+          <button className="btn-ghost" onClick={() => navigate('/leads')}>← Back to Leads</button>
+        </div>
       </div>
 
       {err && <p className="error">{err}</p>}
