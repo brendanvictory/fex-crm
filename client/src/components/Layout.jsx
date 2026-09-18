@@ -4,7 +4,8 @@ import { supabase } from '../supabaseClient';
 const NAV = [
   { to: '/', label: 'Dashboard' },
   { to: '/leads', label: 'Leads' },
-  { to: '/sources', label: 'Sources' }
+  { to: '/sources', label: 'Sources' },
+  { to: '/users', label: 'Users' }
 ];
 
 export default function Layout({ children }) {

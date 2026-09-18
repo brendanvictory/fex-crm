@@ -17,3 +17,16 @@ export async function requireAuth(req, res, next) {
   req.sb = supabaseForToken(token);
   next();
 }
+
+// Gate a route to admins / super_admins. Loads the caller's profile into
+// req.profile (role + org_id) for downstream org-scoping checks.
+export async function requireAdmin(req, res, next) {
+  const { data, error } = await req.sb
+    .from('users').select('role, org_id').eq('id', req.user.id).single();
+  if (error) return res.status(400).json({ error: error.message });
+  if (!['admin', 'super_admin'].includes(data.role)) {
+    return res.status(403).json({ error: 'admins only' });
+  }
+  req.profile = data;
+  next();
+}
