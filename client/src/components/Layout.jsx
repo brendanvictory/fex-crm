@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 const NAV = [
   { to: '/', label: 'Dashboard' },
   { to: '/leads', label: 'Leads' },
+  { to: '/schedule', label: 'Schedule' },
   { to: '/reports', label: 'Reports' },
   { to: '/sources', label: 'Sources' },
   { to: '/users', label: 'Users' }

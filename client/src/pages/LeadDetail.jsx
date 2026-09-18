@@ -183,6 +183,8 @@ export default function LeadDetail() {
           </div>
         </form>
 
+        {!isNew && <Followups leadId={id} />}
+
         {!isNew && (
           <div className="card">
             <div className="section-title">Activity</div>
@@ -210,6 +212,84 @@ function Field({ label, children }) {
     <div className="field">
       <label>{label}</label>
       {children}
+    </div>
+  );
+}
+
+const BLANK_CB = { kind: 'callback', scheduled_at: '', duration_minutes: 30, reminder_minutes: 30, title: '', notes: '' };
+
+function Followups({ leadId }) {
+  const [items, setItems] = useState([]);
+  const [form, setForm] = useState(BLANK_CB);
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    try { setItems(await api(`/callbacks?lead=${leadId}&from=2000-01-01`)); }
+    catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, [leadId]);
+
+  async function add(e) {
+    e.preventDefault();
+    if (!form.scheduled_at) return;
+    setSaving(true); setErr('');
+    try {
+      const iso = new Date(form.scheduled_at).toISOString();
+      await api('/callbacks', { method: 'POST', body: JSON.stringify({ lead_id: leadId, ...form, scheduled_at: iso }) });
+      setForm(BLANK_CB);
+      load();
+    } catch (e) { setErr(e.message); } finally { setSaving(false); }
+  }
+  async function toggle(it) {
+    try { await api(`/callbacks/${it.id}`, { method: 'PATCH', body: JSON.stringify({ completed: !it.completed }) }); load(); }
+    catch (e) { setErr(e.message); }
+  }
+  async function remove(it) {
+    try { await api(`/callbacks/${it.id}`, { method: 'DELETE' }); load(); }
+    catch (e) { setErr(e.message); }
+  }
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <div className="card">
+      <div className="section-title">Follow-ups &amp; appointments</div>
+      {err && <p className="error">{err}</p>}
+      <form className="form-grid" onSubmit={add}>
+        <Field label="Type">
+          <select value={form.kind} onChange={set('kind')}>
+            <option value="callback">Callback</option>
+            <option value="appointment">Appointment</option>
+          </select>
+        </Field>
+        <Field label="When"><input type="datetime-local" value={form.scheduled_at} onChange={set('scheduled_at')} required /></Field>
+        <Field label="Duration (min)"><input type="number" value={form.duration_minutes} onChange={set('duration_minutes')} /></Field>
+        <Field label="Remind (min before)"><input type="number" value={form.reminder_minutes} onChange={set('reminder_minutes')} /></Field>
+        <Field label="Title / note"><input value={form.title} onChange={set('title')} placeholder="e.g. Review quote" /></Field>
+        <div className="field" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn" type="submit" disabled={saving}>{saving ? 'Scheduling…' : 'Schedule'}</button>
+        </div>
+      </form>
+
+      {items.length === 0 ? <p className="muted" style={{ marginBottom: 0 }}>Nothing scheduled.</p> : (
+        <ul className="timeline">
+          {items.map((it) => (
+            <li key={it.id}>
+              <div className="row-actions" style={{ justifyContent: 'space-between' }}>
+                <div style={{ textDecoration: it.completed ? 'line-through' : 'none' }}>
+                  <span className="badge">{it.kind === 'appointment' ? 'Appt' : 'Callback'}</span>{' '}
+                  {new Date(it.scheduled_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  {it.title ? ` — ${it.title}` : ''}
+                </div>
+                <div className="row-actions">
+                  <button className="btn-ghost btn-sm" onClick={() => toggle(it)}>{it.completed ? 'Reopen' : 'Done'}</button>
+                  <button className="btn-ghost btn-sm" onClick={() => remove(it)}>Delete</button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import Sources from './pages/Sources.jsx';
 import Users from './pages/Users.jsx';
 import UserDetail from './pages/UserDetail.jsx';
 import Reports from './pages/Reports.jsx';
+import Schedule from './pages/Schedule.jsx';
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = still loading
@@ -38,6 +39,7 @@ export default function App() {
       <Route path="/leads/import" element={<BulkUpload />} />
       <Route path="/leads/:id" element={<LeadDetail />} />
       <Route path="/reports" element={<Reports />} />
+      <Route path="/schedule" element={<Schedule />} />
       <Route path="/sources" element={<Sources />} />
       <Route path="/users" element={<Users />} />
       <Route path="/users/:id" element={<UserDetail />} />

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { normalizeRecord, prepareLead } from '../lib/leads.js';
+import { supabaseAdmin } from '../supabase.js';
 
 const r = Router();
 
@@ -34,13 +35,13 @@ r.post('/bulk', async (req, res) => {
   const { rows, source_id } = req.body;
   if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
 
-  const { data: me, error: meErr } = await req.sb
+  const { data: me, error: meErr } = await supabaseAdmin
     .from('users').select('org_id').eq('id', req.user.id).single();
   if (meErr) return res.status(400).json({ error: meErr.message });
 
   let source = null;
   if (source_id) {
-    const { data: s } = await req.sb.from('lead_sources').select('*').eq('id', source_id).maybeSingle();
+    const { data: s } = await supabaseAdmin.from('lead_sources').select('*').eq('id', source_id).maybeSingle();
     source = s;
   }
 
@@ -49,12 +50,12 @@ r.post('/bulk', async (req, res) => {
   for (let i = 0; i < rows.length; i++) {
     try {
       const input = normalizeRecord(rows[i]);
-      const { record, duplicate } = await prepareLead(req.sb, source, input, me.org_id);
+      const { record, duplicate } = await prepareLead(supabaseAdmin, source, input, me.org_id);
       if (duplicate) { duplicates++; continue; }
-      const { data, error } = await req.sb.from('leads').insert(record).select('id').single();
+      const { data, error } = await supabaseAdmin.from('leads').insert(record).select('id').single();
       if (error) { errors.push({ row: i + 1, error: error.message }); continue; }
       created++;
-      await req.sb.from('activity_log').insert({
+      await supabaseAdmin.from('activity_log').insert({
         org_id: me.org_id, entity_type: 'lead', entity_id: data.id,
         actor_id: req.user.id, action: 'created', detail: { via: 'bulk_upload' }
       });
@@ -83,23 +84,25 @@ r.get('/:id/activity', async (req, res) => {
   res.json(data);
 });
 
-// POST /api/leads — create one from the UI.
+// POST /api/leads — create one from the UI. Uses the trusted server key and
+// forces the lead into the caller's own org (same trust model as ingest), which
+// avoids the RLS WITH CHECK on user-session inserts.
 r.post('/', async (req, res) => {
-  const { data: me, error: meErr } = await req.sb
+  const { data: me, error: meErr } = await supabaseAdmin
     .from('users').select('org_id').eq('id', req.user.id).single();
   if (meErr) return res.status(400).json({ error: meErr.message });
 
   const body = { ...req.body, org_id: me.org_id };
   delete body.id;
   if (!body.status_id) {
-    const { data: st } = await req.sb
+    const { data: st } = await supabaseAdmin
       .from('lead_statuses').select('id').eq('is_default', true).limit(1).maybeSingle();
     if (st) body.status_id = st.id;
   }
 
-  const { data, error } = await req.sb.from('leads').insert(body).select().single();
+  const { data, error } = await supabaseAdmin.from('leads').insert(body).select().single();
   if (error) return res.status(400).json({ error: error.message });
-  await req.sb.from('activity_log').insert({
+  await supabaseAdmin.from('activity_log').insert({
     org_id: me.org_id, entity_type: 'lead', entity_id: data.id,
     actor_id: req.user.id, action: 'created'
   });
