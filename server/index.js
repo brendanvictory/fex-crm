@@ -8,6 +8,7 @@ import leadsRouter from './routes/leads.js';
 import configRouter from './routes/config.js';
 import ingestRouter from './routes/ingest.js';
 import usersRouter from './routes/users.js';
+import reportsRouter from './routes/reports.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,6 +35,7 @@ app.get('/api/me', requireAuth, async (req, res) => {
 app.use('/api/leads', requireAuth, leadsRouter);
 app.use('/api/config', requireAuth, configRouter);
 app.use('/api/users', requireAuth, usersRouter);
+app.use('/api/reports', requireAuth, reportsRouter);
 
 // ---------------------------------------------------------------------------
 // Serve the built React app

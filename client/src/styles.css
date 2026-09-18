@@ -109,6 +109,22 @@ code.key { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12p
 .callout { background: var(--sky-50); border: 1px solid var(--sky-100); border-radius: 8px;
   padding: 12px 14px; font-size: 13px; }
 
+/* ---- KPI tiles + charts ---- */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.kpi { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.kpi-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.kpi-value { font-size: 32px; font-weight: 800; color: var(--navy); margin-top: 6px; line-height: 1; }
+.kpi-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.chart-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
+.chart-card h3 { margin: 0 0 12px; font-size: 14px; color: var(--navy); }
+.chart-card.full { grid-column: 1 / -1; }
+
+@media (max-width: 980px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .chart-grid { grid-template-columns: 1fr; }
+}
 @media (max-width: 780px) {
   .form-grid { grid-template-columns: 1fr; }
   .sidebar { width: 76px; }
