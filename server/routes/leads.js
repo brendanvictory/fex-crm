@@ -9,7 +9,7 @@ r.get('/', async (req, res) => {
   const { status, source, owner, state, from, to, search } = req.query;
   let q = req.sb
     .from('leads')
-    .select('*, lead_statuses(name), lead_sources(name), owner:users(full_name)')
+    .select('*, lead_statuses(name), lead_sources(name), owner:users!leads_owner_id_fkey(full_name)')
     .order('created_at', { ascending: false })
     .limit(500);
 
