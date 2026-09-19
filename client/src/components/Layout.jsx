@@ -13,6 +13,7 @@ const GROUPS = [
   ] },
   { key: 'leads', label: 'Leads & Sales', items: [
     { to: '/leads', label: 'Leads' },
+    { to: '/policies', label: 'Policies' },
     { to: '/schedule', label: 'Schedule' }
   ] },
   { key: 'insights', label: 'Insights', items: [

@@ -10,7 +10,7 @@ r.get('/revenue', async (req, res) => {
   const { data: me } = await supabaseAdmin.from('users').select('org_id').eq('id', req.user.id).single();
 
   let pq = supabaseAdmin.from('policies')
-    .select('id, annual_premium, agent_id, sold_at, lead:leads(source_id)')
+    .select('id, annual_premium, agent_id, sold_at, status, lead:leads(source_id)')
     .eq('org_id', me.org_id);
   if (from) pq = pq.gte('sold_at', from);
   if (to) pq = pq.lte('sold_at', to);
@@ -20,8 +20,9 @@ r.get('/revenue', async (req, res) => {
   const ids = (policies || []).map((p) => p.id);
   let commissions = [];
   if (ids.length) {
-    const { data: c } = await supabaseAdmin.from('commissions').select('policy_id, kind, amount, user_id').in('policy_id', ids);
-    commissions = c || [];
+    const { data: c } = await supabaseAdmin.from('commissions').select('policy_id, kind, amount, user_id, chargeback').in('policy_id', ids);
+    // charged-back commissions are reversed — drop them from revenue
+    commissions = (c || []).filter((row) => row.chargeback !== true);
   }
   const [{ data: sources }, { data: users }] = await Promise.all([
     supabaseAdmin.from('lead_sources').select('id, name').eq('org_id', me.org_id),
@@ -73,9 +74,14 @@ r.get('/revenue', async (req, res) => {
     by_day.push({ day: k, premium: +(dayMap[k] || 0).toFixed(2) });
   }
 
+  const inForce = policies.filter((p) => ['issued', 'in_force'].includes(p.status)).length;
+  const lapsed = policies.filter((p) => ['lapsed', 'nsf', 'cancelled'].includes(p.status)).length;
+
   res.json({
     totals: {
       policies: policies.length,
+      in_force: inForce,
+      lapsed,
       premium: +premium.toFixed(2),
       house: +house.toFixed(2),
       agent_comp: +agentComp.toFixed(2),

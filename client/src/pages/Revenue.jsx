@@ -34,6 +34,8 @@ export default function Revenue() {
           <StatTile label="Coverwise Revenue" value={rep ? money(rep.totals.house) : '—'} sub="house spread" />
           <StatTile label="Agent Commissions" value={rep ? money(rep.totals.agent_comp) : '—'} />
           <StatTile label="Manager Overrides" value={rep ? money(rep.totals.manager_override) : '—'} />
+          <StatTile label="Policies In Force" value={rep ? rep.totals.in_force : '—'} sub={rep ? `${rep.totals.lapsed} lapsed/cancelled` : ''} />
+          <StatTile label="Total Policies" value={rep ? rep.totals.policies : '—'} />
         </div>
 
         <div className="chart-card full">

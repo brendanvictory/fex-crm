@@ -62,16 +62,45 @@ r.post('/', async (req, res) => {
   res.status(201).json({ policy, commissions: rows });
 });
 
-// GET /api/sales?lead= — sales/policies for a lead (or the org).
+// GET /api/sales?lead=&status=&agent= — sales/policies for a lead or the org.
 r.get('/', async (req, res) => {
   const { data: me } = await supabaseAdmin.from('users').select('org_id').eq('id', req.user.id).single();
   let q = supabaseAdmin.from('policies')
-    .select('*, carriers(name), agent:users(full_name)')
-    .eq('org_id', me.org_id).order('sold_at', { ascending: false }).limit(200);
+    .select('*, carriers(name), agent:users(full_name), lead:leads(first_name,last_name)')
+    .eq('org_id', me.org_id).order('sold_at', { ascending: false }).limit(500);
   if (req.query.lead) q = q.eq('lead_id', req.query.lead);
+  if (req.query.status) q = q.eq('status', req.query.status);
+  if (req.query.agent) q = q.eq('agent_id', req.query.agent);
   const { data, error } = await q;
   if (error) return res.status(400).json({ error: error.message });
   res.json(data);
+});
+
+// A policy in one of these states reverses its commissions (chargeback).
+const REVERSING = new Set(['lapsed', 'nsf', 'cancelled']);
+
+// PATCH /api/sales/:id — update a policy; status changes flip commission chargebacks.
+r.patch('/:id', async (req, res) => {
+  const { data: me } = await supabaseAdmin.from('users').select('id, org_id').eq('id', req.user.id).single();
+  const allowed = ['status', 'product', 'policy_number', 'monthly_premium', 'annual_premium', 'draft_day', 'effective_date', 'issue_date', 'carrier_id'];
+  const patch = { updated_at: new Date().toISOString() };
+  for (const k of allowed) if (k in req.body) patch[k] = req.body[k];
+
+  const { data: policy, error } = await supabaseAdmin.from('policies')
+    .update(patch).eq('id', req.params.id).eq('org_id', me.org_id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  if ('status' in patch) {
+    const charged = REVERSING.has(patch.status);
+    await supabaseAdmin.from('commissions').update({ chargeback: charged }).eq('policy_id', policy.id);
+    if (policy.lead_id) {
+      await supabaseAdmin.from('activity_log').insert({
+        org_id: policy.org_id, entity_type: 'lead', entity_id: policy.lead_id,
+        actor_id: me.id, action: 'policy_status', detail: { status: patch.status }
+      });
+    }
+  }
+  res.json(policy);
 });
 
 export default r;
