@@ -1,7 +1,18 @@
 import { Router } from 'express';
 import { randomBytes } from 'crypto';
+import { supabaseAdmin } from '../supabase.js';
 
 const r = Router();
+
+// Gate helper for dialer config writes (lists/scripts): admin/manager/super.
+async function canManage(userId) {
+  const { data } = await supabaseAdmin.from('users').select('id, role, org_id').eq('id', userId).single();
+  return data && ['super_admin', 'admin', 'manager'].includes(data.role) ? data : null;
+}
+async function myOrg(userId) {
+  const { data } = await supabaseAdmin.from('users').select('org_id').eq('id', userId).single();
+  return data?.org_id || null;
+}
 
 function toE164(raw) {
   if (!raw) return null;
@@ -140,6 +151,65 @@ r.post('/numbers', async (req, res) => {
 
 r.delete('/numbers/:id', async (req, res) => {
   const { error } = await req.sb.from('phone_numbers').delete().eq('id', req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(204).end();
+});
+
+// ---- Dial lists (served via service role so agents can pick them) ----
+r.get('/lists', async (req, res) => {
+  const org = await myOrg(req.user.id);
+  const { data, error } = await supabaseAdmin.from('lead_lists')
+    .select('*').eq('org_id', org).order('created_at', { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.post('/lists', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { data, error } = await supabaseAdmin.from('lead_lists')
+    .insert({ org_id: me.org_id, name: req.body.name, created_by: me.id }).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+});
+r.delete('/lists/:id', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { error } = await supabaseAdmin.from('lead_lists').delete().eq('id', req.params.id).eq('org_id', me.org_id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(204).end();
+});
+
+// ---- Scripts ----
+r.get('/scripts', async (req, res) => {
+  const org = await myOrg(req.user.id);
+  const { data, error } = await supabaseAdmin.from('scripts')
+    .select('*').eq('org_id', org).order('name');
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.post('/scripts', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { data, error } = await supabaseAdmin.from('scripts')
+    .insert({ org_id: me.org_id, name: req.body.name, body: req.body.body || '', is_active: req.body.is_active ?? true })
+    .select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+});
+r.patch('/scripts/:id', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const patch = {};
+  for (const k of ['name', 'body', 'is_active']) if (k in req.body) patch[k] = req.body[k];
+  const { data, error } = await supabaseAdmin.from('scripts')
+    .update(patch).eq('id', req.params.id).eq('org_id', me.org_id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.delete('/scripts/:id', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { error } = await supabaseAdmin.from('scripts').delete().eq('id', req.params.id).eq('org_id', me.org_id);
   if (error) return res.status(400).json({ error: error.message });
   res.status(204).end();
 });

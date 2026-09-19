@@ -32,17 +32,24 @@ r.get('/', async (req, res) => {
 // POST /api/leads/bulk — CSV bulk upload. Body: { rows: [...], source_id? }.
 // Uses the same dedupe/assignment path as the ingest API.
 r.post('/bulk', async (req, res) => {
-  const { rows, source_id } = req.body;
+  const { rows, source_id, list_name } = req.body;
   if (!Array.isArray(rows)) return res.status(400).json({ error: 'rows must be an array' });
 
   const { data: me, error: meErr } = await supabaseAdmin
-    .from('users').select('org_id').eq('id', req.user.id).single();
+    .from('users').select('id, org_id').eq('id', req.user.id).single();
   if (meErr) return res.status(400).json({ error: meErr.message });
 
   let source = null;
   if (source_id) {
     const { data: s } = await supabaseAdmin.from('lead_sources').select('*').eq('id', source_id).maybeSingle();
     source = s;
+  }
+
+  let listId = null;
+  if (list_name && list_name.trim()) {
+    const { data: list } = await supabaseAdmin.from('lead_lists')
+      .insert({ org_id: me.org_id, name: list_name.trim(), created_by: me.id }).select('id').single();
+    listId = list?.id || null;
   }
 
   let created = 0, duplicates = 0;
@@ -52,6 +59,7 @@ r.post('/bulk', async (req, res) => {
       const input = normalizeRecord(rows[i]);
       const { record, duplicate } = await prepareLead(supabaseAdmin, source, input, me.org_id);
       if (duplicate) { duplicates++; continue; }
+      if (listId) record.list_id = listId;
       const { data, error } = await supabaseAdmin.from('leads').insert(record).select('id').single();
       if (error) { errors.push({ row: i + 1, error: error.message }); continue; }
       created++;

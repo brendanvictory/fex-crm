@@ -150,6 +150,9 @@ code.key { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12p
 .chart-card { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); }
 .chart-card h3 { margin: 0 0 14px; font-size: 15px; font-weight: 700; color: var(--ink); }
 .chart-card.full { grid-column: 1 / -1; }
+.kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; font-size: 15px; }
+.kv > div { font-weight: 600; }
+.kv .muted { font-weight: 500; font-size: 12px; }
 
 /* ---- Calendar ---- */
 .cal-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }

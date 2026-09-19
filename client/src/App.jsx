@@ -14,6 +14,8 @@ import Schedule from './pages/Schedule.jsx';
 import Voicemails from './pages/Voicemails.jsx';
 import Queue from './pages/Queue.jsx';
 import Settings from './pages/Settings.jsx';
+import Scripts from './pages/Scripts.jsx';
+import PowerDialer from './pages/PowerDialer.jsx';
 import { DialerProvider } from './dialer/DialerContext.jsx';
 import Softphone from './components/Softphone.jsx';
 
@@ -48,6 +50,8 @@ export default function App() {
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/voicemail" element={<Voicemails />} />
         <Route path="/queue" element={<Queue />} />
+        <Route path="/dialer" element={<PowerDialer />} />
+        <Route path="/scripts" element={<Scripts />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/users" element={<Users />} />

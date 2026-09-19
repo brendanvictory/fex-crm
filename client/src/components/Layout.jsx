@@ -7,9 +7,11 @@ import { api } from '../api';
 const NAV = [
   { to: '/', label: 'Dashboard' },
   { to: '/queue', label: 'My Queue' },
+  { to: '/dialer', label: 'Power Dialer' },
   { to: '/leads', label: 'Leads' },
   { to: '/schedule', label: 'Schedule' },
   { to: '/voicemail', label: 'Voicemail' },
+  { to: '/scripts', label: 'Scripts' },
   { to: '/reports', label: 'Reports' },
   { to: '/sources', label: 'Sources' },
   { to: '/users', label: 'Users' },

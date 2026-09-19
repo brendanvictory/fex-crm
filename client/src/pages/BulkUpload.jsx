@@ -31,6 +31,7 @@ export default function BulkUpload() {
   const navigate = useNavigate();
   const [sources, setSources] = useState([]);
   const [sourceId, setSourceId] = useState('');
+  const [listName, setListName] = useState('');
   const [rows, setRows] = useState([]);
   const [fileName, setFileName] = useState('');
   const [result, setResult] = useState(null);
@@ -66,7 +67,7 @@ export default function BulkUpload() {
     try {
       const res = await api('/leads/bulk', {
         method: 'POST',
-        body: JSON.stringify({ rows, source_id: sourceId || null })
+        body: JSON.stringify({ rows, source_id: sourceId || null, list_name: listName || null })
       });
       setResult(res);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
@@ -93,13 +94,17 @@ export default function BulkUpload() {
 
           <div className="form-grid">
             <div className="field">
+              <label>List name (optional)</label>
+              <input value={listName} onChange={(e) => setListName(e.target.value)} placeholder="e.g. TX Facebook — Sept" />
+            </div>
+            <div className="field">
               <label>Attribute to source (optional)</label>
               <select value={sourceId} onChange={(e) => setSourceId(e.target.value)}>
                 <option value="">— None —</option>
                 {sources.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
-            <div className="field">
+            <div className="field full">
               <label>CSV file</label>
               <input type="file" accept=".csv,text/csv" onChange={onFile} />
             </div>
