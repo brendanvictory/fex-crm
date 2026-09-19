@@ -11,7 +11,8 @@ export default function Softphone() {
   const {
     status, lead, leadLabel, muted, seconds, error, setError,
     startManualCall, hangup, toggleMute, sendDigit,
-    dispoFor, closeDispo, panelOpen, closePhone
+    dispoFor, closeDispo, panelOpen, closePhone,
+    incoming, acceptIncoming, rejectIncoming
   } = useDialer();
 
   const active = status === 'connecting' || status === 'in-call';
@@ -48,7 +49,19 @@ export default function Softphone() {
         </div>
       )}
 
-      {showPanel && (
+      {incoming && (
+        <div className="incoming-card">
+          <div className="inc-ring">Incoming call</div>
+          <div className="inc-name">{incoming.lead ? leadName(incoming.lead) : (incoming.from || 'Unknown')}</div>
+          {incoming.lead && <div className="muted" style={{ fontSize: 12 }}>{incoming.from}</div>}
+          <div className="inc-actions">
+            <button className="sp-hang" onClick={rejectIncoming}>Decline</button>
+            <button className="call-btn" style={{ flex: 1 }} onClick={acceptIncoming}>Accept</button>
+          </div>
+        </div>
+      )}
+
+      {showPanel && !incoming && (
         <div className="phone-panel">
           <div className="phone-head">
             <span className="phone-title">Phone</span>

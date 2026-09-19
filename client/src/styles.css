@@ -49,7 +49,9 @@ a { color: var(--accent); text-decoration: none; }
 .side-link {
   padding: 10px 14px; border-radius: 10px; color: rgba(255,255,255,.72);
   font-weight: 600; font-size: 14px; transition: background .15s, color .15s;
+  display: flex; align-items: center; justify-content: space-between;
 }
+.nav-badge { background: #e5484d; color: #fff; font-size: 11px; font-weight: 800; border-radius: 999px; padding: 1px 7px; }
 .side-link:hover { background: rgba(255,255,255,.12); color: #fff; }
 .side-link.active { background: rgba(255,255,255,.18); color: #fff; box-shadow: inset 3px 0 0 var(--sky); }
 button.side-link { width: 100%; text-align: left; background: transparent; border: none; font-family: inherit; cursor: pointer; }
@@ -213,6 +215,16 @@ code.key { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12p
 }
 .key:hover { background: var(--sky-50); border-color: var(--sky-100); }
 .key:active { transform: scale(.96); background: var(--sky-100); }
+
+.incoming-card {
+  position: fixed; bottom: 22px; right: 22px; z-index: 65; width: 300px;
+  background: #fff; border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow-lg);
+  padding: 18px; text-align: center; border-top: 4px solid #17ad72;
+}
+.inc-ring { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: #17ad72; animation: blink 1.2s infinite; }
+@keyframes blink { 50% { opacity: .4; } }
+.inc-name { font-size: 20px; font-weight: 800; margin-top: 6px; }
+.inc-actions { display: flex; gap: 10px; margin-top: 16px; }
 
 .phone-actions { display: flex; gap: 10px; padding: 0 16px 16px; align-items: center; }
 .sp-hang { background: #e5484d; color: #fff; border: none; border-radius: 10px; padding: 10px 16px; font-weight: 700; font-size: 14px; cursor: pointer; flex: 1; }

@@ -11,6 +11,7 @@ import Users from './pages/Users.jsx';
 import UserDetail from './pages/UserDetail.jsx';
 import Reports from './pages/Reports.jsx';
 import Schedule from './pages/Schedule.jsx';
+import Voicemails from './pages/Voicemails.jsx';
 import Queue from './pages/Queue.jsx';
 import Settings from './pages/Settings.jsx';
 import { DialerProvider } from './dialer/DialerContext.jsx';
@@ -45,6 +46,7 @@ export default function App() {
         <Route path="/leads/:id" element={<LeadDetail />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/schedule" element={<Schedule />} />
+        <Route path="/voicemail" element={<Voicemails />} />
         <Route path="/queue" element={<Queue />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/sources" element={<Sources />} />

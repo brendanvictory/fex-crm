@@ -130,6 +130,19 @@ r.patch('/:id/disposition', async (req, res) => {
   res.json({ ok: true, advanced });
 });
 
+// GET /api/calls/lookup?number= — resolve an inbound caller to a lead (for the
+// incoming-call popup). Org-scoped via the service role.
+r.get('/lookup', async (req, res) => {
+  const { data: me } = await supabaseAdmin.from('users').select('org_id').eq('id', req.user.id).single();
+  const norm = String(req.query.number || '').replace(/\D/g, '').slice(-10);
+  if (norm.length < 7) return res.json({ lead: null });
+  const { data } = await supabaseAdmin.from('leads')
+    .select('id, first_name, last_name, phone').eq('org_id', me.org_id)
+    .not('phone', 'is', null).ilike('phone', `%${norm.slice(-7)}%`).limit(10);
+  const lead = (data || []).find((l) => String(l.phone).replace(/\D/g, '').slice(-10) === norm) || null;
+  res.json({ lead });
+});
+
 // GET /api/calls?lead= — call history for a lead.
 r.get('/', async (req, res) => {
   const { lead } = req.query;

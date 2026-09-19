@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout.jsx';
-import { api } from '../api';
+import { api, apiBlob } from '../api';
+import { useDialer } from '../dialer/DialerContext.jsx';
 
 export default function Settings() {
   const [statuses, setStatuses] = useState([]);
@@ -10,6 +11,15 @@ export default function Settings() {
   const [newStatus, setNewStatus] = useState({ name: '', sort_order: 0 });
   const [newDisp, setNewDisp] = useState({ name: '', maps_to_status_id: '' });
   const [newNum, setNewNum] = useState({ number: '', state: '', label: '' });
+  const dialer = useDialer();
+  const [greeting, setGreeting] = useState({ has: false });
+  const [greetingAudio, setGreetingAudio] = useState('');
+
+  async function loadGreeting() { try { setGreeting(await api('/voice/my-greeting')); } catch { /* */ } }
+  useEffect(() => { loadGreeting(); }, []);
+  async function playGreeting() {
+    try { const b = await apiBlob('/voice/my-greeting/audio'); setGreetingAudio(URL.createObjectURL(b)); } catch (e) { setErr(e.message); }
+  }
 
   async function load() {
     try {
@@ -57,6 +67,20 @@ export default function Settings() {
       {err && <p className="error">{err}</p>}
 
       <div className="stack">
+        <div className="card">
+          <div className="section-title">My voicemail greeting</div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            {greeting.has ? 'You have a recorded greeting. Callers who reach your voicemail hear it.' : 'No greeting recorded yet — callers hear the default message.'}
+          </p>
+          <div className="row-actions">
+            <button className="btn" onClick={() => dialer.recordGreeting()} disabled={dialer?.status !== 'idle'}>Record greeting</button>
+            {greeting.has && <button className="btn-ghost" onClick={playGreeting}>Play current</button>}
+            <button className="btn-ghost" onClick={loadGreeting}>Refresh</button>
+          </div>
+          {greetingAudio && <audio src={greetingAudio} controls autoPlay style={{ marginTop: 12, height: 34 }} />}
+          <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>Recording connects your softphone — speak after the tone, press # when done, then hit Refresh.</p>
+        </div>
+
         <div className="card">
           <div className="section-title">Lead statuses</div>
           <div className="table-wrap">

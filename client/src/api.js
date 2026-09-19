@@ -19,3 +19,12 @@ export async function api(path, opts = {}) {
   }
   return res.status === 204 ? null : res.json();
 }
+
+// Authenticated fetch that returns a Blob (for streaming recordings/voicemails).
+export async function apiBlob(path) {
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  const res = await fetch(`/api${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error('Could not load audio');
+  return res.blob();
+}

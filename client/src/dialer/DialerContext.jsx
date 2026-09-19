@@ -11,15 +11,44 @@ export function DialerProvider({ children }) {
   const deviceRef = useRef(null);
   const callRef = useRef(null);
   const timerRef = useRef(null);
+  const statusRef = useRef('idle');
 
   const [ready, setReady] = useState(false);
-  const [status, setStatus] = useState('idle');   // idle | connecting | in-call | ended
+  const [status, setStatusState] = useState('idle');   // idle | connecting | in-call | ended
+  const setStatus = (s) => { statusRef.current = s; setStatusState(s); };
   const [lead, setLead] = useState(null);
   const [muted, setMuted] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [error, setError] = useState('');
   const [dispoFor, setDispoFor] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [incoming, setIncoming] = useState(null);   // { call, from, lead }
+
+  const startTimer = () => { setSeconds(0); clearInterval(timerRef.current); timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000); };
+  const stopTimer = () => clearInterval(timerRef.current);
+
+  // Attach handlers to an active Call (outbound or accepted inbound).
+  const wireCall = useCallback((call, meta) => {
+    callRef.current = call;
+    call.on('accept', () => { setStatus('in-call'); startTimer(); });
+    call.on('disconnect', () => {
+      stopTimer(); setLead(null); callRef.current = null;
+      if (meta.noDispo) { setStatus('idle'); }
+      else { setStatus('ended'); setDispoFor({ call_id: meta.call_id, lead: meta.displayLead || null }); }
+    });
+    call.on('cancel', () => { stopTimer(); setStatus('idle'); setLead(null); callRef.current = null; });
+    call.on('error', (e) => setError(e?.message || 'Call error'));
+  }, []);
+
+  const handleIncoming = useCallback(async (call) => {
+    if (statusRef.current === 'connecting' || statusRef.current === 'in-call') { try { call.reject(); } catch { /* */ } return; }
+    const from = call.parameters?.From || call.customParameters?.get?.('From') || '';
+    setIncoming({ call, from, lead: null });
+    setPanelOpen(true);
+    try { const { lead } = await api(`/calls/lookup?number=${encodeURIComponent(from)}`); if (lead) setIncoming((i) => (i ? { ...i, lead } : i)); } catch { /* */ }
+    call.on('cancel', () => setIncoming(null));
+    call.on('disconnect', () => setIncoming(null));
+  }, []);
 
   const initDevice = useCallback(async () => {
     try {
@@ -27,29 +56,26 @@ export function DialerProvider({ children }) {
       if (deviceRef.current) { deviceRef.current.updateToken(token); setReady(true); return deviceRef.current; }
       const device = new Device(token, { codecPreferences: ['opus', 'pcmu'], logLevel: 'error' });
       device.on('error', (e) => setError(e?.message || 'Phone error'));
-      device.on('tokenWillExpire', async () => {
-        try { const t = await api('/voice/token'); device.updateToken(t.token); } catch { /* ignore */ }
-      });
+      device.on('incoming', handleIncoming);
+      device.on('tokenWillExpire', async () => { try { const t = await api('/voice/token'); device.updateToken(t.token); } catch { /* */ } });
       deviceRef.current = device;
+      try { await device.register(); } catch { /* incoming just won't work */ }
       setReady(true);
       return device;
     } catch (e) {
       setError(e.message || 'Could not start the phone');
       return null;
     }
-  }, []);
+  }, [handleIncoming]);
 
   useEffect(() => {
     initDevice();
-    return () => { try { deviceRef.current?.destroy(); } catch { /* ignore */ } clearInterval(timerRef.current); };
+    return () => { try { deviceRef.current?.destroy(); } catch { /* */ } clearInterval(timerRef.current); };
   }, [initDevice]);
-
-  const startTimer = () => { setSeconds(0); clearInterval(timerRef.current); timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000); };
-  const stopTimer = () => clearInterval(timerRef.current);
 
   const connect = useCallback(async ({ lead_id, number, caller_id, displayLead }) => {
     setError('');
-    if (status === 'connecting' || status === 'in-call') return;
+    if (statusRef.current === 'connecting' || statusRef.current === 'in-call') return;
     const device = deviceRef.current || await initDevice();
     if (!device) return;
     try {
@@ -60,36 +86,53 @@ export function DialerProvider({ children }) {
       setMuted(false);
       setPanelOpen(true);
       const call = await device.connect({ params: { To: res.to, callerId: res.caller_id || '', call_id: res.call_id } });
-      callRef.current = call;
-      call.on('accept', () => { setStatus('in-call'); startTimer(); });
-      call.on('disconnect', () => {
-        stopTimer(); setStatus('ended');
-        setDispoFor({ call_id: res.call_id, lead: displayLead || { phone: res.to } });
-        setLead(null); callRef.current = null;
-      });
-      call.on('cancel', () => { stopTimer(); setStatus('idle'); setLead(null); callRef.current = null; });
-      call.on('error', (e) => setError(e?.message || 'Call error'));
+      wireCall(call, { call_id: res.call_id, displayLead: displayLead || { phone: res.to } });
     } catch (e) {
       setStatus('idle'); setLead(null);
       setError(e.message || 'Could not place the call');
     }
-  }, [status, initDevice]);
+  }, [initDevice, wireCall]);
 
   const startCall = useCallback((leadObj, callerId) => connect({ lead_id: leadObj.id, caller_id: callerId, displayLead: leadObj }), [connect]);
   const startManualCall = useCallback((number, callerId) => connect({ number, caller_id: callerId, displayLead: { phone: number } }), [connect]);
 
-  const hangup = useCallback(() => { try { callRef.current?.disconnect(); } catch { /* ignore */ } }, []);
+  const acceptIncoming = useCallback(() => {
+    const inc = incoming; if (!inc) return;
+    const call = inc.call;
+    const call_id = call.customParameters?.get?.('call_id') || null;
+    const displayLead = inc.lead || { phone: inc.from };
+    setLead(displayLead); setStatus('connecting'); setMuted(false); setIncoming(null); setPanelOpen(true);
+    wireCall(call, { call_id, displayLead });
+    try { call.accept(); } catch (e) { setError(e?.message || 'Could not accept'); }
+  }, [incoming, wireCall]);
+
+  const rejectIncoming = useCallback(() => { try { incoming?.call.reject(); } catch { /* */ } setIncoming(null); }, [incoming]);
+
+  const recordGreeting = useCallback(async () => {
+    setError('');
+    if (statusRef.current !== 'idle') return;
+    const device = deviceRef.current || await initDevice();
+    if (!device) return;
+    try {
+      setLead({ first_name: 'Recording greeting…' }); setStatus('connecting'); setMuted(false); setPanelOpen(true);
+      const call = await device.connect({ params: { mode: 'record_greeting' } });
+      wireCall(call, { call_id: null, displayLead: null, noDispo: true });
+    } catch (e) { setStatus('idle'); setLead(null); setError(e.message || 'Could not start recording'); }
+  }, [initDevice, wireCall]);
+
+  const hangup = useCallback(() => { try { callRef.current?.disconnect(); } catch { /* */ } }, []);
   const toggleMute = useCallback(() => { const c = callRef.current; if (!c) return; const m = !muted; c.mute(m); setMuted(m); }, [muted]);
-  const sendDigit = useCallback((d) => { try { callRef.current?.sendDigits(String(d)); } catch { /* ignore */ } }, []);
+  const sendDigit = useCallback((d) => { try { callRef.current?.sendDigits(String(d)); } catch { /* */ } }, []);
   const openPhone = useCallback(() => setPanelOpen(true), []);
-  const closePhone = useCallback(() => { if (status === 'idle') setPanelOpen(false); }, [status]);
+  const closePhone = useCallback(() => { if (statusRef.current === 'idle') setPanelOpen(false); }, []);
   const closeDispo = useCallback(() => { setDispoFor(null); setStatus('idle'); setMuted(false); setSeconds(0); }, []);
 
   return (
     <Ctx.Provider value={{
       ready, status, lead, leadLabel, muted, seconds, error, setError,
       startCall, startManualCall, hangup, toggleMute, sendDigit,
-      dispoFor, closeDispo, panelOpen, openPhone, closePhone
+      dispoFor, closeDispo, panelOpen, openPhone, closePhone,
+      incoming, acceptIncoming, rejectIncoming, recordGreeting
     }}>
       {children}
     </Ctx.Provider>
