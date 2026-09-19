@@ -32,10 +32,11 @@ r.post('/next', async (req, res) => {
   const { data: cands, error } = await q;
   if (error) return res.status(400).json({ error: error.message });
 
+  let skippedWindow = 0;
   for (const lead of cands || []) {
     const tz = lead.timezone || stateTimezone(lead.state) || 'America/New_York';
     const h = localHour(tz);
-    if (h != null && (h < 8 || h >= 21)) continue; // outside calling hours
+    if (h != null && (h < 8 || h >= 21)) { skippedWindow++; continue; } // outside calling hours
 
     const { data: locked } = await supabaseAdmin.from('leads')
       .update({ locked_by: me.id, locked_at: new Date().toISOString(), last_dialed_at: new Date().toISOString() })
@@ -49,7 +50,13 @@ r.post('/next', async (req, res) => {
       return res.json({ lead: full });
     }
   }
-  res.json({ done: true });
+
+  // Nothing dialable — say why.
+  let total = supabaseAdmin.from('leads').select('id', { count: 'exact', head: true }).eq('org_id', me.org_id).eq('dnc', false);
+  if (list_id && list_id !== 'all') total = total.eq('list_id', list_id);
+  const { count } = await total;
+  const reason = (count || 0) === 0 ? 'empty' : (skippedWindow > 0 ? 'after_hours' : 'busy');
+  res.json({ done: true, reason, total: count || 0 });
 });
 
 // POST /api/dialer/stop — release the agent's lock when they stop dialing.

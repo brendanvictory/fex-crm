@@ -23,7 +23,7 @@ export default function PowerDialer() {
   const [running, setRunning] = useState(false);
   const [lead, setLead] = useState(null);
   const [countdown, setCountdown] = useState(0);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState(null); // null | {reason, total}
   const [err, setErr] = useState('');
 
   const leadRef = useRef(null);
@@ -58,10 +58,10 @@ export default function PowerDialer() {
   }
 
   async function loadNext() {
-    setErr(''); setLead(null); leadRef.current = null; setDone(false);
+    setErr(''); setLead(null); leadRef.current = null; setDone(null);
     try {
       const res = await api('/dialer/next', { method: 'POST', body: JSON.stringify({ list_id: listId }) });
-      if (res.done) { setDone(true); setRunning(false); runningRef.current = false; return; }
+      if (res.done) { setDone(res); setRunning(false); runningRef.current = false; return; }
       setLead(res.lead); leadRef.current = res.lead;
       scheduleDial(res.lead);
     } catch (e) { setErr(e.message); }
@@ -101,8 +101,8 @@ export default function PowerDialer() {
           <div className="field">
             <label>List to dial</label>
             <select value={listId} onChange={(e) => setListId(e.target.value)}>
-              <option value="all">All my leads</option>
-              {lists.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              <option value="all">All leads</option>
+              {lists.map((l) => <option key={l.id} value={l.id}>{l.name}{l.lead_count != null ? ` (${l.lead_count})` : ''}</option>)}
             </select>
           </div>
           <div className="field">
@@ -113,7 +113,14 @@ export default function PowerDialer() {
             </select>
           </div>
           <div><button className="btn" onClick={start}>Start dialing</button></div>
-          {done && <p className="muted">That list is finished — nothing left to dial right now.</p>}
+          {done && (
+            <p className="muted">
+              {done.reason === 'empty' && 'This list has no leads yet — if you just uploaded it, the rows may have been skipped as duplicates. Try "All leads" or check the import result.'}
+              {done.reason === 'after_hours' && `All ${done.total} lead(s) in this list are outside their local calling hours right now. Calling is allowed 8am–9pm in each lead's timezone — they'll be dialable once it's 8am where they are.`}
+              {done.reason === 'busy' && 'All leads in this list are currently being dialed by other agents.'}
+              {!['empty', 'after_hours', 'busy'].includes(done.reason) && 'Nothing left to dial right now.'}
+            </p>
+          )}
         </div>
       ) : (
         <div className="chart-grid">

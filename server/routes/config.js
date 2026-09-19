@@ -161,7 +161,12 @@ r.get('/lists', async (req, res) => {
   const { data, error } = await supabaseAdmin.from('lead_lists')
     .select('*').eq('org_id', org).order('created_at', { ascending: false });
   if (error) return res.status(400).json({ error: error.message });
-  res.json(data);
+  // attach lead counts so the UI can show which lists actually have leads
+  const withCounts = await Promise.all((data || []).map(async (l) => {
+    const { count } = await supabaseAdmin.from('leads').select('id', { count: 'exact', head: true }).eq('list_id', l.id);
+    return { ...l, lead_count: count || 0 };
+  }));
+  res.json(withCounts);
 });
 r.post('/lists', async (req, res) => {
   const me = await canManage(req.user.id);
