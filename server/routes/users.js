@@ -68,6 +68,21 @@ r.patch('/:id', requireAdmin, async (req, res) => {
   res.json(data);
 });
 
+// POST /api/users/:id/reset-password — admin sets a new password for a user.
+r.post('/:id/reset-password', requireAdmin, async (req, res) => {
+  const { password } = req.body;
+  if (!password || password.length < 6) return res.status(400).json({ error: 'password must be at least 6 characters' });
+
+  const { data: target, error: te } = await supabaseAdmin.from('users').select('org_id').eq('id', req.params.id).single();
+  if (te) return res.status(404).json({ error: te.message });
+  if (req.profile.role !== 'super_admin' && target.org_id !== req.profile.org_id)
+    return res.status(403).json({ error: 'out of scope' });
+
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(req.params.id, { password });
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 // ---- Licenses ----
 r.get('/:id/licenses', async (req, res) => {
   const { data, error } = await req.sb

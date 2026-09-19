@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Layout from '../components/Layout.jsx';
 import { api, apiBlob } from '../api';
 import { useDialer } from '../dialer/DialerContext.jsx';
+import { supabase } from '../supabaseClient';
 
 export default function Settings() {
   const [statuses, setStatuses] = useState([]);
@@ -14,6 +15,15 @@ export default function Settings() {
   const dialer = useDialer();
   const [greeting, setGreeting] = useState({ has: false });
   const [greetingAudio, setGreetingAudio] = useState('');
+
+  const [myPw, setMyPw] = useState('');
+  const [myPwMsg, setMyPwMsg] = useState('');
+  async function changeMyPw() {
+    setMyPwMsg(''); setErr('');
+    if (!myPw || myPw.length < 6) { setErr('Password must be at least 6 characters.'); return; }
+    const { error } = await supabase.auth.updateUser({ password: myPw });
+    if (error) setErr(error.message); else { setMyPwMsg('Password updated.'); setMyPw(''); }
+  }
 
   async function loadGreeting() { try { setGreeting(await api('/voice/my-greeting')); } catch { /* */ } }
   useEffect(() => { loadGreeting(); }, []);
@@ -67,6 +77,16 @@ export default function Settings() {
       {err && <p className="error">{err}</p>}
 
       <div className="stack">
+        <div className="card">
+          <div className="section-title">My account</div>
+          <p className="muted" style={{ marginTop: 0 }}>Change your own password.</p>
+          <div className="filters" style={{ marginBottom: 0 }}>
+            <input type="password" placeholder="New password" value={myPw} onChange={(e) => setMyPw(e.target.value)} autoComplete="new-password" />
+            <button className="btn" type="button" onClick={changeMyPw}>Update password</button>
+          </div>
+          {myPwMsg && <p className="ok" style={{ marginBottom: 0 }}>{myPwMsg}</p>}
+        </div>
+
         <div className="card">
           <div className="section-title">My voicemail greeting</div>
           <p className="muted" style={{ marginTop: 0 }}>

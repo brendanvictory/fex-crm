@@ -17,6 +17,18 @@ export default function UserDetail() {
   const [appt, setAppt] = useState({ carrier: '', status: 'active' });
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
+  const [pw, setPw] = useState('');
+  const [pwMsg, setPwMsg] = useState('');
+
+  async function resetPw() {
+    setErr(''); setPwMsg('');
+    if (!pw || pw.length < 6) { setErr('Password must be at least 6 characters.'); return; }
+    try {
+      await api(`/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ password: pw }) });
+      setPwMsg('Password updated. Share it with the user securely.');
+      setPw('');
+    } catch (e) { setErr(e.message); }
+  }
 
   async function loadAll() {
     const [u, all, l, a] = await Promise.all([
@@ -112,6 +124,17 @@ export default function UserDetail() {
             <button className="btn" type="submit">Save profile</button>
           </div>
         </form>
+
+        <div className="card">
+          <div className="section-title">Reset password</div>
+          <p className="muted" style={{ marginTop: 0 }}>Set a new password for this user and share it with them securely. They can change it later from their own account.</p>
+          <div className="filters" style={{ marginBottom: 0 }}>
+            <input type="text" placeholder="New password" value={pw} onChange={(e) => setPw(e.target.value)} />
+            <button className="btn-ghost btn-sm" type="button" onClick={() => setPw(Math.random().toString(36).slice(2, 10) + 'A1')}>Generate</button>
+            <button className="btn" type="button" onClick={resetPw}>Set password</button>
+          </div>
+          {pwMsg && <p className="ok" style={{ marginBottom: 0 }}>{pwMsg}</p>}
+        </div>
 
         <div className="card">
           <div className="section-title">State licenses</div>

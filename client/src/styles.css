@@ -100,6 +100,8 @@ button.side-link { width: 100%; text-align: left; background: transparent; borde
 }
 .btn-ghost:hover { border-color: var(--accent); background: var(--sky-50); }
 .btn-sm { padding: 5px 11px; font-size: 13px; box-shadow: none; }
+.link-btn { background: none; border: none; color: var(--accent); font-weight: 600; font-size: 13px; cursor: pointer; padding: 10px 0 0; font-family: inherit; }
+.link-btn:hover { text-decoration: underline; }
 
 /* ---- Cards ---- */
 .card { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
