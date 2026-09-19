@@ -107,6 +107,12 @@ export async function assignOwner(sb, orgId, source, state) {
   return counts[0].id;
 }
 
+// Flag a lead as worked (engaged), so it shows in the Active leads view.
+export async function markWorked(sb, leadId) {
+  if (!leadId) return;
+  await sb.from('leads').update({ worked: true, last_activity_at: new Date().toISOString() }).eq('id', leadId);
+}
+
 // Build a ready-to-insert lead record; returns {record, duplicate}.
 export async function prepareLead(sb, source, input, orgId) {
   const mapped = {};

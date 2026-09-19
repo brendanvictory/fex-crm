@@ -13,13 +13,16 @@ export default function Leads() {
   const [sources, setSources] = useState([]);
   const [agents, setAgents] = useState([]);
   const [filters, setFilters] = useState({ search: '', status: '', source: '', owner: '', state: '', from: '', to: '' });
+  const [scope, setScope] = useState('active');
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
 
   async function load() {
     setLoading(true); setErr('');
     try {
-      const qs = new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
+      const params = new URLSearchParams(Object.entries(filters).filter(([, v]) => v));
+      if (scope === 'all') params.set('scope', 'all');
+      const qs = params.toString();
       setLeads(await api('/leads' + (qs ? `?${qs}` : '')));
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   }
@@ -30,11 +33,11 @@ export default function Leads() {
       .catch(() => {});
   }, []);
 
-  // Reload whenever a filter changes (debounced lightly for typing).
+  // Reload whenever a filter or scope changes (debounced lightly for typing).
   useEffect(() => {
     const t = setTimeout(load, 250);
     return () => clearTimeout(t);
-  }, [filters]); // eslint-disable-line
+  }, [filters, scope]); // eslint-disable-line
 
   const set = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }));
 
@@ -46,6 +49,14 @@ export default function Leads() {
           <button className="btn-ghost" onClick={() => navigate('/leads/import')}>Bulk Upload</button>
           <button className="btn" onClick={() => navigate('/leads/new')}>+ New Lead</button>
         </div>
+      </div>
+
+      <div className="segmented">
+        <button className={'seg' + (scope === 'active' ? ' active' : '')} onClick={() => setScope('active')}>Active</button>
+        <button className={'seg' + (scope === 'all' ? ' active' : '')} onClick={() => setScope('all')}>All leads</button>
+        <span className="muted" style={{ fontSize: 12, marginLeft: 6 }}>
+          {scope === 'active' ? 'Leads that have been worked (called, scheduled, or advanced).' : 'Everything, including imported leads not yet worked.'}
+        </span>
       </div>
 
       <div className="filters">

@@ -1,17 +1,23 @@
 import { Router } from 'express';
-import { normalizeRecord, prepareLead } from '../lib/leads.js';
+import { normalizeRecord, prepareLead, markWorked } from '../lib/leads.js';
 import { supabaseAdmin } from '../supabase.js';
 
 const r = Router();
 
 // GET /api/leads  — list, with optional filters. RLS decides what's visible.
 r.get('/', async (req, res) => {
-  const { status, source, owner, state, from, to, search } = req.query;
+  const { status, source, owner, state, from, to, search, scope } = req.query;
   let q = req.sb
     .from('leads')
     .select('*, lead_statuses(name), lead_sources(name), owner:users!leads_owner_id_fkey(full_name)')
-    .order('created_at', { ascending: false })
     .limit(500);
+
+  // Default view = "active" leads (engaged), not the raw imported pool.
+  if (scope !== 'all') {
+    q = q.eq('worked', true).order('last_activity_at', { ascending: false, nullsFirst: false });
+  } else {
+    q = q.order('created_at', { ascending: false });
+  }
 
   if (status) q = q.eq('status_id', status);
   if (source) q = q.eq('source_id', source);
@@ -100,7 +106,7 @@ r.post('/', async (req, res) => {
     .from('users').select('org_id').eq('id', req.user.id).single();
   if (meErr) return res.status(400).json({ error: meErr.message });
 
-  const body = { ...req.body, org_id: me.org_id };
+  const body = { ...req.body, org_id: me.org_id, worked: true, last_activity_at: new Date().toISOString() };
   delete body.id;
   if (!body.status_id) {
     const { data: st } = await supabaseAdmin
@@ -119,7 +125,7 @@ r.post('/', async (req, res) => {
 
 // PATCH /api/leads/:id
 r.patch('/:id', async (req, res) => {
-  const patch = { ...req.body, updated_at: new Date().toISOString() };
+  const patch = { ...req.body, updated_at: new Date().toISOString(), worked: true, last_activity_at: new Date().toISOString() };
   delete patch.id;
   delete patch.org_id;
 
@@ -157,7 +163,7 @@ r.post('/:id/move', async (req, res) => {
   }
   if (!allowed) return res.status(403).json({ error: 'not permitted' });
 
-  const patch = { updated_at: new Date().toISOString() };
+  const patch = { updated_at: new Date().toISOString(), worked: true, last_activity_at: new Date().toISOString() };
   if (status_id) patch.status_id = status_id;
   const claimed = claim && !lead.owner_id;
   if (claimed) patch.owner_id = me.id;

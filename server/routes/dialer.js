@@ -38,8 +38,9 @@ r.post('/next', async (req, res) => {
     const h = localHour(tz);
     if (h != null && (h < 8 || h >= 21)) { skippedWindow++; continue; } // outside calling hours
 
+    const now = new Date().toISOString();
     const { data: locked } = await supabaseAdmin.from('leads')
-      .update({ locked_by: me.id, locked_at: new Date().toISOString(), last_dialed_at: new Date().toISOString() })
+      .update({ locked_by: me.id, locked_at: now, last_dialed_at: now, worked: true, last_activity_at: now })
       .eq('id', lead.id)
       .or(`locked_by.is.null,locked_at.lt.${staleCut}`)
       .select('id').maybeSingle();

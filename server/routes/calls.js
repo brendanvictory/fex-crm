@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../supabase.js';
-import { stateTimezone } from '../lib/leads.js';
+import { stateTimezone, markWorked } from '../lib/leads.js';
 
 const r = Router();
 
@@ -85,6 +85,7 @@ r.post('/start', async (req, res) => {
       direction: 'outbound', from_number: callerId, to_number: to, started_at: new Date().toISOString()
     }).select('id').single();
     if (error) return res.status(400).json({ error: error.message });
+    await markWorked(supabaseAdmin, lead.id);
     return res.json({ call_id: call.id, to, caller_id: callerId });
   }
 

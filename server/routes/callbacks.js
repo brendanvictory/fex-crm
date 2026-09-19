@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { markWorked } from '../lib/leads.js';
+import { supabaseAdmin } from '../supabase.js';
 
 const r = Router();
 
@@ -58,6 +60,7 @@ r.post('/', async (req, res) => {
     actor_id: req.user.id, action: `${kind}_scheduled`,
     detail: { scheduled_at, title }
   });
+  await markWorked(supabaseAdmin, lead_id);
   res.status(201).json(data);
 });
 

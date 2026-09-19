@@ -104,6 +104,13 @@ button.side-link { width: 100%; text-align: left; background: transparent; borde
 /* ---- Cards ---- */
 .card { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); }
 
+/* ---- Segmented toggle ---- */
+.segmented { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+.seg { background: #fff; border: 1px solid var(--line); color: var(--muted); font-weight: 600; font-size: 13px;
+  padding: 7px 16px; border-radius: 9px; cursor: pointer; font-family: inherit; }
+.seg:hover { border-color: var(--accent); color: var(--navy); }
+.seg.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+
 /* ---- Filters ---- */
 .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
 .filters input, .filters select {
