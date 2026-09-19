@@ -16,6 +16,8 @@ import Queue from './pages/Queue.jsx';
 import Settings from './pages/Settings.jsx';
 import Scripts from './pages/Scripts.jsx';
 import PowerDialer from './pages/PowerDialer.jsx';
+import Commissions from './pages/Commissions.jsx';
+import Revenue from './pages/Revenue.jsx';
 import { DialerProvider } from './dialer/DialerContext.jsx';
 import Softphone from './components/Softphone.jsx';
 
@@ -47,6 +49,8 @@ export default function App() {
         <Route path="/leads/import" element={<BulkUpload />} />
         <Route path="/leads/:id" element={<LeadDetail />} />
         <Route path="/reports" element={<Reports />} />
+        <Route path="/revenue" element={<Revenue />} />
+        <Route path="/commissions" element={<Commissions />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/voicemail" element={<Voicemails />} />
         <Route path="/queue" element={<Queue />} />

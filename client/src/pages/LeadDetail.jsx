@@ -193,6 +193,8 @@ export default function LeadDetail() {
           </div>
         </form>
 
+        {!isNew && <Sales leadId={id} />}
+
         {!isNew && <Followups leadId={id} />}
 
         {!isNew && (
@@ -222,6 +224,78 @@ function Field({ label, children }) {
     <div className="field">
       <label>{label}</label>
       {children}
+    </div>
+  );
+}
+
+const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+function Sales({ leadId }) {
+  const [carriers, setCarriers] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [show, setShow] = useState(false);
+  const [form, setForm] = useState({ carrier_id: '', product: '', policy_number: '', monthly_premium: '', draft_day: '', effective_date: '' });
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function load() {
+    try {
+      const [c, s] = await Promise.all([api('/config/carriers'), api(`/sales?lead=${leadId}`)]);
+      setCarriers(c); setSales(s);
+    } catch (e) { setErr(e.message); }
+  }
+  useEffect(() => { load(); }, [leadId]);
+
+  async function record(e) {
+    e.preventDefault();
+    if (!form.carrier_id) { setErr('Pick a carrier.'); return; }
+    setSaving(true); setErr('');
+    try {
+      await api('/sales', { method: 'POST', body: JSON.stringify(form) });
+      setForm({ carrier_id: '', product: '', policy_number: '', monthly_premium: '', draft_day: '', effective_date: '' });
+      setShow(false); load();
+    } catch (e) { setErr(e.message); } finally { setSaving(false); }
+  }
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  return (
+    <div className="card">
+      <div className="row-actions" style={{ justifyContent: 'space-between' }}>
+        <div className="section-title" style={{ margin: 0 }}>Sales &amp; policies</div>
+        {!show && <button className="btn" onClick={() => setShow(true)}>Record sale</button>}
+      </div>
+      {err && <p className="error">{err}</p>}
+
+      {show && (
+        <form className="form-grid" style={{ marginTop: 14 }} onSubmit={record}>
+          <Field label="Carrier">
+            <select value={form.carrier_id} onChange={set('carrier_id')} required>
+              <option value="">— Select —</option>
+              {carriers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+          <Field label="Product"><input value={form.product} onChange={set('product')} /></Field>
+          <Field label="Monthly premium"><input type="number" step="0.01" value={form.monthly_premium} onChange={set('monthly_premium')} /></Field>
+          <Field label="Policy number"><input value={form.policy_number} onChange={set('policy_number')} /></Field>
+          <Field label="Draft day (1–28)"><input type="number" value={form.draft_day} onChange={set('draft_day')} /></Field>
+          <Field label="Effective date"><input type="date" value={form.effective_date} onChange={set('effective_date')} /></Field>
+          <div className="field full row-actions">
+            <button className="btn" type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save sale'}</button>
+            <button className="btn-ghost" type="button" onClick={() => setShow(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {sales.length === 0 ? (!show && <p className="muted" style={{ marginBottom: 0 }}>No sales recorded.</p>) : (
+        <ul className="timeline" style={{ marginTop: 12 }}>
+          {sales.map((s) => (
+            <li key={s.id}>
+              <div><strong>{s.carriers?.name || s.carrier}</strong> {s.product ? `· ${s.product}` : ''} · {money(s.annual_premium)}/yr</div>
+              <div className="when">{s.status} · {s.sold_at ? new Date(s.sold_at).toLocaleDateString() : ''}{s.policy_number ? ` · #${s.policy_number}` : ''}</div>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

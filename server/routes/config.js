@@ -219,4 +219,55 @@ r.delete('/scripts/:id', async (req, res) => {
   res.status(204).end();
 });
 
+// ---- Carriers ----
+r.get('/carriers', async (req, res) => {
+  const org = await myOrg(req.user.id);
+  const { data, error } = await supabaseAdmin.from('carriers').select('*').eq('org_id', org).order('name');
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.post('/carriers', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { data, error } = await supabaseAdmin.from('carriers')
+    .insert({ org_id: me.org_id, name: req.body.name, agency_pct: req.body.agency_pct ?? 0 }).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+});
+r.patch('/carriers/:id', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const patch = {};
+  for (const k of ['name', 'agency_pct', 'is_active']) if (k in req.body) patch[k] = req.body[k];
+  const { data, error } = await supabaseAdmin.from('carriers').update(patch).eq('id', req.params.id).eq('org_id', me.org_id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.delete('/carriers/:id', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { error } = await supabaseAdmin.from('carriers').delete().eq('id', req.params.id).eq('org_id', me.org_id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(204).end();
+});
+
+// ---- Commission rates (comp level per person per carrier) ----
+r.get('/commission-rates', async (req, res) => {
+  const org = await myOrg(req.user.id);
+  const { data, error } = await supabaseAdmin.from('commission_rates').select('*').eq('org_id', org);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.put('/commission-rates', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { carrier_id, user_id, pct } = req.body;
+  if (!carrier_id || !user_id) return res.status(400).json({ error: 'carrier_id and user_id required' });
+  const { data, error } = await supabaseAdmin.from('commission_rates')
+    .upsert({ org_id: me.org_id, carrier_id, user_id, pct: Number(pct) || 0 }, { onConflict: 'carrier_id,user_id' })
+    .select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
 export default r;

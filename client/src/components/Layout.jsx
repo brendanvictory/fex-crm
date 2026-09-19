@@ -16,11 +16,13 @@ const GROUPS = [
     { to: '/schedule', label: 'Schedule' }
   ] },
   { key: 'insights', label: 'Insights', items: [
-    { to: '/reports', label: 'Reports' }
+    { to: '/reports', label: 'Reports' },
+    { to: '/revenue', label: 'Revenue' }
   ] },
   { key: 'admin', label: 'Admin', items: [
     { to: '/sources', label: 'Sources' },
     { to: '/scripts', label: 'Scripts' },
+    { to: '/commissions', label: 'Commissions' },
     { to: '/users', label: 'Users' },
     { to: '/settings', label: 'Settings' }
   ] }

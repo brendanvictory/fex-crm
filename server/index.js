@@ -15,6 +15,7 @@ import voiceRouter from './routes/voice.js';
 import callsRouter from './routes/calls.js';
 import voicemailsRouter from './routes/voicemails.js';
 import dialerRouter from './routes/dialer.js';
+import salesRouter from './routes/sales.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -52,6 +53,7 @@ app.use('/api/queue', requireAuth, queueRouter);
 app.use('/api/calls', requireAuth, callsRouter);
 app.use('/api/voicemails', requireAuth, voicemailsRouter);
 app.use('/api/dialer', requireAuth, dialerRouter);
+app.use('/api/sales', requireAuth, salesRouter);
 
 // ---------------------------------------------------------------------------
 // Serve the built React app
