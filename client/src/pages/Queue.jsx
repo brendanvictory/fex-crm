@@ -57,7 +57,7 @@ export default function Queue() {
   }
 
   return (
-    <Layout>
+    <Layout fluid>
       <div className="page-head">
         <h1>My Queue</h1>
         <button className="btn-ghost" onClick={load}>Refresh</button>

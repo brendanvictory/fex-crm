@@ -33,7 +33,7 @@ function loadOpen() {
   try { return JSON.parse(localStorage.getItem('cw_nav_open') || '{}'); } catch { return {}; }
 }
 
-export default function Layout({ children }) {
+export default function Layout({ children, fluid }) {
   const loc = useLocation();
   const dialer = useDialer();
   const [vmCount, setVmCount] = useState(0);
@@ -96,7 +96,7 @@ export default function Layout({ children }) {
         <button className="btn-ghost" onClick={() => supabase.auth.signOut()}>Sign out</button>
       </aside>
       <div className="main">
-        <main className="content">{children}</main>
+        <main className={'content' + (fluid ? ' content-fluid' : '')}>{children}</main>
       </div>
     </div>
   );
