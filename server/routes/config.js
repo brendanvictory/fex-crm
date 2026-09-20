@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { randomBytes } from 'crypto';
 import { supabaseAdmin } from '../supabase.js';
+import { sendMail, mailConfigured } from '../lib/mailer.js';
 
 const r = Router();
 
@@ -217,6 +218,21 @@ r.delete('/scripts/:id', async (req, res) => {
   const { error } = await supabaseAdmin.from('scripts').delete().eq('id', req.params.id).eq('org_id', me.org_id);
   if (error) return res.status(400).json({ error: error.message });
   res.status(204).end();
+});
+
+// ---- Email test ----
+r.get('/email-status', async (req, res) => {
+  res.json({ configured: mailConfigured() });
+});
+r.post('/test-email', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  if (!mailConfigured()) return res.status(400).json({ error: 'SMTP is not configured yet' });
+  const { data: u } = await supabaseAdmin.from('users').select('email').eq('id', req.user.id).single();
+  try {
+    await sendMail({ to: u.email, subject: 'Coverwise test email', html: '<p>Your Coverwise email is configured and working.</p>' });
+    res.json({ ok: true, to: u.email });
+  } catch (e) { res.status(400).json({ error: e.message }); }
 });
 
 // ---- Carriers ----

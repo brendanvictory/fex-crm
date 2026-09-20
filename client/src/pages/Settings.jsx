@@ -18,6 +18,14 @@ export default function Settings() {
 
   const [myPw, setMyPw] = useState('');
   const [myPwMsg, setMyPwMsg] = useState('');
+  const [emailStatus, setEmailStatus] = useState(null);
+  const [emailMsg, setEmailMsg] = useState('');
+  useEffect(() => { api('/config/email-status').then(setEmailStatus).catch(() => {}); }, []);
+  async function testEmail() {
+    setEmailMsg(''); setErr('');
+    try { const r = await api('/config/test-email', { method: 'POST' }); setEmailMsg(`Test email sent to ${r.to}.`); }
+    catch (e) { setErr(e.message); }
+  }
   async function changeMyPw() {
     setMyPwMsg(''); setErr('');
     if (!myPw || myPw.length < 6) { setErr('Password must be at least 6 characters.'); return; }
@@ -85,6 +93,22 @@ export default function Settings() {
             <button className="btn" type="button" onClick={changeMyPw}>Update password</button>
           </div>
           {myPwMsg && <p className="ok" style={{ marginBottom: 0 }}>{myPwMsg}</p>}
+        </div>
+
+        <div className="card">
+          <div className="section-title">System email</div>
+          <p className="muted" style={{ marginTop: 0 }}>
+            Coverwise sends account emails (welcome logins, notifications) from your Google Workspace mailbox.{' '}
+            {emailStatus == null ? 'Checking status…'
+              : emailStatus.configured
+                ? 'Status: connected.'
+                : 'Status: not configured — add the SMTP variables in Render, then redeploy.'}
+          </p>
+          <div className="row-actions">
+            <button className="btn" type="button" onClick={testEmail} disabled={!emailStatus?.configured}>Send test email</button>
+          </div>
+          {emailMsg && <p className="ok" style={{ marginBottom: 0 }}>{emailMsg}</p>}
+          <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>The test goes to your own login email.</p>
         </div>
 
         <div className="card">

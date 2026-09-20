@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { requireAdmin } from '../auth.js';
 import { supabaseAdmin } from '../supabase.js';
+import { sendMail } from '../lib/mailer.js';
 
 const r = Router();
 
@@ -47,6 +48,20 @@ r.post('/', requireAdmin, async (req, res) => {
     await supabaseAdmin.auth.admin.deleteUser(uid); // roll back the orphaned auth user
     return res.status(400).json({ error: error.message });
   }
+
+  // Welcome email with sign-in details (non-blocking; no-ops if SMTP is off).
+  const appUrl = process.env.PUBLIC_BASE_URL || '';
+  sendMail({
+    to: email,
+    subject: 'Your Coverwise login',
+    html: `<p>Hi ${full_name || ''},</p>
+      <p>An account has been created for you in Coverwise.</p>
+      <p><strong>Sign in:</strong> <a href="${appUrl}">${appUrl}</a><br/>
+      <strong>Email:</strong> ${email}<br/>
+      <strong>Temporary password:</strong> ${password}</p>
+      <p>Please sign in and change your password from Settings.</p>`
+  }).catch(() => { /* email is best-effort */ });
+
   res.status(201).json(data);
 });
 
