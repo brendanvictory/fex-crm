@@ -20,6 +20,10 @@ const GROUPS = [
     { to: '/reports', label: 'Reports' },
     { to: '/revenue', label: 'Revenue' }
   ] },
+  { key: 'support', label: 'Support', items: [
+    { to: '/getting-started', label: 'Getting Started' },
+    { to: '/help', label: 'Knowledge Base' }
+  ] },
   { key: 'admin', label: 'Admin', items: [
     { to: '/sources', label: 'Sources' },
     { to: '/scripts', label: 'Scripts' },

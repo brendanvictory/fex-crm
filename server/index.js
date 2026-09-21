@@ -3,7 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { requireAuth } from './auth.js';
+import { requireAuth, loadProfile } from './auth.js';
 import leadsRouter from './routes/leads.js';
 import configRouter from './routes/config.js';
 import ingestRouter from './routes/ingest.js';
@@ -16,6 +16,8 @@ import callsRouter from './routes/calls.js';
 import voicemailsRouter from './routes/voicemails.js';
 import dialerRouter from './routes/dialer.js';
 import salesRouter from './routes/sales.js';
+import kbRouter from './routes/kb.js';
+import onboardingRouter from './routes/onboarding.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +56,8 @@ app.use('/api/calls', requireAuth, callsRouter);
 app.use('/api/voicemails', requireAuth, voicemailsRouter);
 app.use('/api/dialer', requireAuth, dialerRouter);
 app.use('/api/sales', requireAuth, salesRouter);
+app.use('/api/kb', requireAuth, loadProfile, kbRouter);
+app.use('/api/onboarding', requireAuth, loadProfile, onboardingRouter);
 
 // ---------------------------------------------------------------------------
 // Serve the built React app

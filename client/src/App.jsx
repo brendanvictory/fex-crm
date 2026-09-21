@@ -20,6 +20,8 @@ import PowerDialer from './pages/PowerDialer.jsx';
 import Commissions from './pages/Commissions.jsx';
 import Revenue from './pages/Revenue.jsx';
 import Policies from './pages/Policies.jsx';
+import Help from './pages/Help.jsx';
+import GettingStarted from './pages/GettingStarted.jsx';
 import { DialerProvider } from './dialer/DialerContext.jsx';
 import Softphone from './components/Softphone.jsx';
 
@@ -65,6 +67,8 @@ export default function App() {
         <Route path="/dialer" element={<PowerDialer />} />
         <Route path="/scripts" element={<Scripts />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/help" element={<Help />} />
+        <Route path="/getting-started" element={<GettingStarted />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/users" element={<Users />} />
         <Route path="/users/:id" element={<UserDetail />} />

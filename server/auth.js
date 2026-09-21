@@ -18,6 +18,17 @@ export async function requireAuth(req, res, next) {
   next();
 }
 
+// Load the caller's profile (role, org_id, full_name) into req.profile for any
+// authenticated user. Use on routers that scope by org but aren't admin-only.
+export async function loadProfile(req, res, next) {
+  if (req.profile) return next();
+  const { data, error } = await req.sb
+    .from('users').select('id, role, org_id, full_name').eq('id', req.user.id).single();
+  if (error) return res.status(400).json({ error: error.message });
+  req.profile = data;
+  next();
+}
+
 // Gate a route to admins / super_admins. Loads the caller's profile into
 // req.profile (role + org_id) for downstream org-scoping checks.
 export async function requireAdmin(req, res, next) {
