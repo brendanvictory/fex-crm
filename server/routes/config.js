@@ -126,6 +126,76 @@ r.post('/sources/:id/rotate-key', async (req, res) => {
   res.json(data);
 });
 
+// ---- Partner (vendor) logins for a source ----
+async function requireAdminRole(userId) {
+  const { data } = await supabaseAdmin.from('users').select('role, org_id').eq('id', userId).single();
+  return data && ['admin', 'super_admin'].includes(data.role) ? data : null;
+}
+
+r.get('/sources/:id/vendors', async (req, res) => {
+  const admin = await requireAdminRole(req.user.id);
+  if (!admin) return res.status(403).json({ error: 'admins only' });
+  const { data, error } = await supabaseAdmin
+    .from('users').select('id, full_name, email, is_active, created_at')
+    .eq('source_id', req.params.id).eq('role', 'vendor').order('full_name');
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+r.post('/sources/:id/vendors', async (req, res) => {
+  const admin = await requireAdminRole(req.user.id);
+  if (!admin) return res.status(403).json({ error: 'admins only' });
+  const { email, password, full_name } = req.body;
+  if (!email || !password) return res.status(400).json({ error: 'email and password required' });
+
+  const { data: source, error: sErr } = await supabaseAdmin
+    .from('lead_sources').select('id, org_id, name').eq('id', req.params.id).single();
+  if (sErr) return res.status(404).json({ error: 'source not found' });
+  if (admin.role !== 'super_admin' && source.org_id !== admin.org_id)
+    return res.status(403).json({ error: 'out of scope' });
+
+  const { data: created, error: ce } = await supabaseAdmin.auth.admin.createUser({
+    email, password, email_confirm: true
+  });
+  if (ce) return res.status(400).json({ error: ce.message });
+
+  const { data, error } = await supabaseAdmin.from('users').insert({
+    id: created.user.id, org_id: source.org_id, role: 'vendor',
+    source_id: source.id, full_name, email, is_active: true
+  }).select().single();
+  if (error) {
+    await supabaseAdmin.auth.admin.deleteUser(created.user.id);
+    return res.status(400).json({ error: error.message });
+  }
+
+  const appUrl = process.env.PUBLIC_BASE_URL || '';
+  sendMail({
+    to: email,
+    subject: `Your ${source.name} partner login`,
+    html: `<p>Hi ${full_name || ''},</p>
+      <p>A partner portal login has been created for you to track the leads you send.</p>
+      <p><strong>Sign in:</strong> <a href="${appUrl}">${appUrl}</a><br/>
+      <strong>Email:</strong> ${email}<br/>
+      <strong>Temporary password:</strong> ${password}</p>
+      <p>Please sign in and change your password.</p>`
+  }).catch(() => {});
+
+  res.status(201).json(data);
+});
+
+r.patch('/sources/:id/vendors/:uid', async (req, res) => {
+  const admin = await requireAdminRole(req.user.id);
+  if (!admin) return res.status(403).json({ error: 'admins only' });
+  const patch = {};
+  if ('is_active' in req.body) patch.is_active = !!req.body.is_active;
+  if ('full_name' in req.body) patch.full_name = req.body.full_name;
+  const { data, error } = await supabaseAdmin
+    .from('users').update(patch)
+    .eq('id', req.params.uid).eq('source_id', req.params.id).eq('role', 'vendor').select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
 // ---- Twilio phone numbers (local-presence caller IDs) ----
 r.get('/numbers', async (req, res) => {
   const { data, error } = await req.sb.from('phone_numbers').select('*').order('state');

@@ -26,6 +26,7 @@ const GROUPS = [
   ] },
   { key: 'admin', label: 'Admin', items: [
     { to: '/sources', label: 'Sources' },
+    { to: '/partners', label: 'Partners' },
     { to: '/scripts', label: 'Scripts' },
     { to: '/commissions', label: 'Commissions' },
     { to: '/users', label: 'Users' },

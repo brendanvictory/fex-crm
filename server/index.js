@@ -18,6 +18,7 @@ import dialerRouter from './routes/dialer.js';
 import salesRouter from './routes/sales.js';
 import kbRouter from './routes/kb.js';
 import onboardingRouter from './routes/onboarding.js';
+import partnerRouter from './routes/partner.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -58,6 +59,7 @@ app.use('/api/dialer', requireAuth, dialerRouter);
 app.use('/api/sales', requireAuth, salesRouter);
 app.use('/api/kb', requireAuth, loadProfile, kbRouter);
 app.use('/api/onboarding', requireAuth, loadProfile, onboardingRouter);
+app.use('/api/partner', requireAuth, loadProfile, partnerRouter);
 
 // ---------------------------------------------------------------------------
 // Serve the built React app

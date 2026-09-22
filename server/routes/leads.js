@@ -180,4 +180,52 @@ r.post('/:id/move', async (req, res) => {
   res.json(data);
 });
 
+// ---- Returns / credits (managers & admins) ----
+// GET /api/leads/:id/returns — return history for this lead.
+r.get('/:id/returns', async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('lead_returns').select('*').eq('lead_id', req.params.id).order('created_at', { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+// POST /api/leads/:id/return — flag this lead returnable to the vendor (creates a credit).
+r.post('/:id/return', async (req, res) => {
+  const { data: me } = await supabaseAdmin
+    .from('users').select('id, role, org_id').eq('id', req.user.id).single();
+  if (!me || !['manager', 'admin', 'super_admin'].includes(me.role))
+    return res.status(403).json({ error: 'not allowed' });
+
+  const { data: lead, error: le } = await supabaseAdmin
+    .from('leads').select('id, org_id, source_id').eq('id', req.params.id).single();
+  if (le) return res.status(404).json({ error: 'lead not found' });
+  if (me.role !== 'super_admin' && lead.org_id !== me.org_id)
+    return res.status(403).json({ error: 'out of scope' });
+  if (!lead.source_id) return res.status(400).json({ error: 'lead has no source to credit' });
+
+  // Default the credit to the source's cost per lead unless an amount is given.
+  let amount = req.body.amount;
+  if (amount == null || amount === '') {
+    const { data: src } = await supabaseAdmin.from('lead_sources').select('cost_per_lead').eq('id', lead.source_id).single();
+    amount = src?.cost_per_lead ?? null;
+  }
+  const row = {
+    org_id: lead.org_id, source_id: lead.source_id, lead_id: lead.id,
+    reason: req.body.reason || 'other',
+    status: req.body.status || 'approved',
+    amount: amount == null ? null : Number(amount),
+    note: req.body.note || null,
+    created_by: me.id,
+    decided_at: new Date().toISOString()
+  };
+  const { data, error } = await supabaseAdmin.from('lead_returns').insert(row).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  await supabaseAdmin.from('activity_log').insert({
+    org_id: lead.org_id, entity_type: 'lead', entity_id: lead.id,
+    actor_id: me.id, action: 'returned_to_vendor', detail: { reason: row.reason, amount: row.amount }
+  });
+  res.status(201).json(data);
+});
+
 export default r;

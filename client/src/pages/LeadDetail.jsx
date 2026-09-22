@@ -218,7 +218,7 @@ export default function LeadDetail() {
             ))}
           </div>
 
-          {tab === 'info' && <div className="stack">{infoForm}</div>}
+          {tab === 'info' && <div className="stack">{infoForm}<ReturnCard leadId={id} /></div>}
 
           {tab === 'sales' && <div className="stack"><Sales leadId={id} onChange={reloadActivity} /></div>}
 
@@ -280,6 +280,74 @@ function NotesCard({ form, set, save, saving }) {
 }
 
 const money = (n) => '$' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 2 });
+
+const RETURN_REASONS = [
+  ['bad_number', 'Bad / disconnected number'],
+  ['dnc_on_arrival', 'On DNC at arrival'],
+  ['duplicate', 'Duplicate'],
+  ['no_contact', 'No contact after attempts'],
+  ['wrong_info', 'Wrong / invalid info'],
+  ['other', 'Other']
+];
+
+// Managers/admins can flag a lead back to its vendor as a credit. Hidden for agents.
+function ReturnCard({ leadId }) {
+  const [role, setRole] = useState(null);
+  const [items, setItems] = useState([]);
+  const [reason, setReason] = useState('bad_number');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [err, setErr] = useState('');
+  const [msg, setMsg] = useState('');
+
+  useEffect(() => { api('/me').then((m) => setRole(m.profile?.role || 'agent')).catch(() => setRole('agent')); }, []);
+  async function load() { try { setItems(await api(`/leads/${leadId}/returns`)); } catch { /* */ } }
+  useEffect(() => { load(); }, [leadId]);
+
+  if (!role || !['manager', 'admin', 'super_admin'].includes(role)) return null;
+
+  async function submit() {
+    setErr(''); setMsg('');
+    try {
+      const body = { reason, note };
+      if (amount !== '') body.amount = Number(amount);
+      await api(`/leads/${leadId}/return`, { method: 'POST', body: JSON.stringify(body) });
+      setMsg('Return recorded — the vendor will see the credit.');
+      setNote(''); setAmount(''); load();
+    } catch (e) { setErr(e.message); }
+  }
+
+  return (
+    <div className="card">
+      <div className="section-title">Return to vendor</div>
+      <p className="muted" style={{ marginTop: 0 }}>Flag this lead back to its source as a credit. The vendor sees it in their portal.</p>
+      {err && <p className="error">{err}</p>}
+      {msg && <p className="ok">{msg}</p>}
+      <div className="form-grid">
+        <Field label="Reason">
+          <select value={reason} onChange={(e) => setReason(e.target.value)}>
+            {RETURN_REASONS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+        </Field>
+        <Field label="Credit amount (blank = cost per lead)"><input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} /></Field>
+        <Field label="Note (optional)"><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
+        <div className="field" style={{ justifyContent: 'flex-end' }}>
+          <button className="btn" type="button" onClick={submit}>Record return</button>
+        </div>
+      </div>
+      {items.length > 0 && (
+        <ul className="timeline" style={{ marginTop: 12 }}>
+          {items.map((x) => (
+            <li key={x.id}>
+              <div><strong>{(RETURN_REASONS.find((r) => r[0] === x.reason) || [null, x.reason])[1]}</strong> · {money(x.amount)} · {x.status}</div>
+              <div className="when">{new Date(x.created_at).toLocaleString()}{x.note ? ` — ${x.note}` : ''}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function Sales({ leadId, onChange }) {
   const [carriers, setCarriers] = useState([]);

@@ -22,12 +22,16 @@ import Revenue from './pages/Revenue.jsx';
 import Policies from './pages/Policies.jsx';
 import Help from './pages/Help.jsx';
 import GettingStarted from './pages/GettingStarted.jsx';
+import Partners from './pages/Partners.jsx';
+import PartnerPortal from './pages/PartnerPortal.jsx';
+import { api } from './api';
 import { DialerProvider } from './dialer/DialerContext.jsx';
 import Softphone from './components/Softphone.jsx';
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = still loading
   const [recovery, setRecovery] = useState(false);
+  const [role, setRole] = useState(undefined); // undefined = not yet loaded
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -37,6 +41,12 @@ export default function App() {
     });
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  // Load the profile role so we can route vendors to the partner portal.
+  useEffect(() => {
+    if (!session) { setRole(undefined); return; }
+    api('/me').then((m) => setRole(m.profile?.role || 'agent')).catch(() => setRole('agent'));
+  }, [session]);
 
   if (session === undefined) return <p style={{ padding: 24 }}>Loading…</p>;
   if (recovery) return <ResetPassword onDone={() => setRecovery(false)} />;
@@ -48,6 +58,11 @@ export default function App() {
       </Routes>
     );
   }
+
+  if (role === undefined) return <p style={{ padding: 24 }}>Loading…</p>;
+
+  // Vendors get a locked-down partner portal — never the CRM.
+  if (role === 'vendor') return <PartnerPortal />;
 
   return (
     <DialerProvider>
@@ -69,6 +84,7 @@ export default function App() {
         <Route path="/settings" element={<Settings />} />
         <Route path="/help" element={<Help />} />
         <Route path="/getting-started" element={<GettingStarted />} />
+        <Route path="/partners" element={<Partners />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/users" element={<Users />} />
         <Route path="/users/:id" element={<UserDetail />} />

@@ -34,6 +34,24 @@ export function dedupeKey(input) {
   return null;
 }
 
+// Pull the vendor's own reference id out of an incoming post, so rejects/returns
+// can be shown back to them without exposing our PII. Checks common key names.
+const REF_KEYS = new Set([
+  'posting_id', 'postingid', 'lead_id', 'leadid', 'id', 'ref', 'reference',
+  'sub_id', 'subid', 'subid1', 's1', 'external_id', 'externalid',
+  'vendor_lead_id', 'transaction_id', 'transactionid', 'clickid', 'click_id'
+]);
+export function postingRef(raw) {
+  for (const k of Object.keys(raw || {})) {
+    const norm = String(k || '').trim().toLowerCase().replace(/[\s\-]+/g, '_');
+    if (REF_KEYS.has(norm)) {
+      const v = raw[k];
+      if (v != null && String(v).trim() !== '') return String(v).trim().slice(0, 120);
+    }
+  }
+  return null;
+}
+
 const FIELDS = new Set([
   'first_name', 'last_name', 'phone', 'email', 'address1', 'address2', 'city', 'state', 'zip',
   'dob', 'age', 'gender', 'beneficiary_name', 'beneficiary_relationship', 'tobacco',
