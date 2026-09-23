@@ -50,14 +50,30 @@ export function DialerProvider({ children }) {
     call.on('disconnect', () => setIncoming(null));
   }, []);
 
+  // Fetch a fresh Twilio token and hand it to the live Device. Best-effort.
+  const refreshToken = useCallback(async () => {
+    try {
+      const { token } = await api('/voice/token');
+      if (deviceRef.current) deviceRef.current.updateToken(token);
+      return token;
+    } catch { return null; }
+  }, []);
+
   const initDevice = useCallback(async () => {
     try {
       const { token } = await api('/voice/token');
       if (deviceRef.current) { deviceRef.current.updateToken(token); setReady(true); return deviceRef.current; }
-      const device = new Device(token, { codecPreferences: ['opus', 'pcmu'], logLevel: 'error' });
-      device.on('error', (e) => setError(e?.message || 'Phone error'));
+      // tokenRefreshMs: fire tokenWillExpire 3 min early so a slow/throttled tab
+      // still has time to renew before the token actually lapses.
+      const device = new Device(token, { codecPreferences: ['opus', 'pcmu'], logLevel: 'error', tokenRefreshMs: 180000 });
+      device.on('error', (e) => {
+        // Expired/invalid token errors are recoverable — renew silently instead
+        // of alarming the agent with a red toast.
+        if ([20104, 20103, 31204, 31205].includes(e?.code)) { refreshToken(); return; }
+        setError(e?.message || 'Phone error');
+      });
       device.on('incoming', handleIncoming);
-      device.on('tokenWillExpire', async () => { try { const t = await api('/voice/token'); device.updateToken(t.token); } catch { /* */ } });
+      device.on('tokenWillExpire', () => { refreshToken(); });
       deviceRef.current = device;
       try { await device.register(); } catch { /* incoming just won't work */ }
       setReady(true);
@@ -66,18 +82,29 @@ export function DialerProvider({ children }) {
       setError(e.message || 'Could not start the phone');
       return null;
     }
-  }, [handleIncoming]);
+  }, [handleIncoming, refreshToken]);
 
   useEffect(() => {
     initDevice();
-    return () => { try { deviceRef.current?.destroy(); } catch { /* */ } clearInterval(timerRef.current); };
-  }, [initDevice]);
+    // Belt-and-suspenders: renew well inside the 1-hour TTL, and whenever the
+    // tab regains focus (background tabs throttle timers and miss the event).
+    const poll = setInterval(() => { refreshToken(); }, 25 * 60 * 1000);
+    const onVis = () => { if (document.visibilityState === 'visible') refreshToken(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(poll);
+      document.removeEventListener('visibilitychange', onVis);
+      try { deviceRef.current?.destroy(); } catch { /* */ }
+      clearInterval(timerRef.current);
+    };
+  }, [initDevice, refreshToken]);
 
   const connect = useCallback(async ({ lead_id, number, caller_id, displayLead }) => {
     setError('');
     if (statusRef.current === 'connecting' || statusRef.current === 'in-call') return;
     const device = deviceRef.current || await initDevice();
     if (!device) return;
+    await refreshToken(); // guarantee a live token for this call
     try {
       const body = lead_id ? { lead_id, caller_id } : { number, caller_id };
       const res = await api('/calls/start', { method: 'POST', body: JSON.stringify(body) });
@@ -91,7 +118,7 @@ export function DialerProvider({ children }) {
       setStatus('idle'); setLead(null);
       setError(e.message || 'Could not place the call');
     }
-  }, [initDevice, wireCall]);
+  }, [initDevice, wireCall, refreshToken]);
 
   const startCall = useCallback((leadObj, callerId) => connect({ lead_id: leadObj.id, caller_id: callerId, displayLead: leadObj }), [connect]);
   const startManualCall = useCallback((number, callerId) => connect({ number, caller_id: callerId, displayLead: { phone: number } }), [connect]);
