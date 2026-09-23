@@ -2,28 +2,30 @@
 -- the script on the Power Dialer. Managed on the Scripts admin page.
 -- Run once in Supabase (safe to re-run). Seeds a starter set if none exist.
 
-create table if not exists rebuttals (
+set search_path = public;
+
+create table if not exists public.rebuttals (
   id         uuid primary key default gen_random_uuid(),
-  org_id     uuid not null references organizations(id) on delete cascade,
+  org_id     uuid not null references public.organizations(id) on delete cascade,
   title      text not null,               -- the objection
   body       text not null default '',    -- the response (supports {{field}} merge)
   sort_order int  not null default 0,
   is_active  boolean not null default true,
   created_at timestamptz not null default now()
 );
-create index if not exists idx_rebuttals_org on rebuttals(org_id);
+create index if not exists idx_rebuttals_org on public.rebuttals(org_id);
 
-alter table rebuttals enable row level security;
+alter table public.rebuttals enable row level security;
 -- Read/write via the server (service role), scoped in code — no client policies.
 
 do $$
 declare org uuid;
 begin
-  select id into org from organizations order by created_at limit 1;
+  select id into org from public.organizations order by created_at limit 1;
   if org is null then return; end if;
-  if exists (select 1 from rebuttals where org_id = org) then return; end if;
+  if exists (select 1 from public.rebuttals where org_id = org) then return; end if;
 
-  insert into rebuttals (org_id, title, body, sort_order) values
+  insert into public.rebuttals (org_id, title, body, sort_order) values
     (org, 'I need to think about it.',
      'Totally understand — most people do. What specifically is giving you pause: the coverage amount, the monthly price, or the company? Let''s look at just that piece.', 0),
     (org, 'I can''t afford it.',
