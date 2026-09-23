@@ -290,6 +290,43 @@ r.delete('/scripts/:id', async (req, res) => {
   res.status(204).end();
 });
 
+// ---- Rebuttals (objection/response cards shown on the dialer) ----
+r.get('/rebuttals', async (req, res) => {
+  const org = await myOrg(req.user.id);
+  const { data, error } = await supabaseAdmin.from('rebuttals')
+    .select('*').eq('org_id', org).order('sort_order').order('created_at');
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.post('/rebuttals', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { data, error } = await supabaseAdmin.from('rebuttals')
+    .insert({ org_id: me.org_id, title: req.body.title, body: req.body.body || '',
+      sort_order: Number(req.body.sort_order) || 0, is_active: req.body.is_active ?? true })
+    .select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json(data);
+});
+r.patch('/rebuttals/:id', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const patch = {};
+  for (const k of ['title', 'body', 'is_active', 'sort_order']) if (k in req.body) patch[k] = req.body[k];
+  if ('sort_order' in patch) patch.sort_order = Number(patch.sort_order) || 0;
+  const { data, error } = await supabaseAdmin.from('rebuttals')
+    .update(patch).eq('id', req.params.id).eq('org_id', me.org_id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.delete('/rebuttals/:id', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { error } = await supabaseAdmin.from('rebuttals').delete().eq('id', req.params.id).eq('org_id', me.org_id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(204).end();
+});
+
 // ---- Email test ----
 r.get('/email-status', async (req, res) => {
   res.json({ configured: mailConfigured() });

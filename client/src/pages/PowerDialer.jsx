@@ -18,6 +18,8 @@ export default function PowerDialer() {
   const dialer = useDialer();
   const [lists, setLists] = useState([]);
   const [scripts, setScripts] = useState([]);
+  const [rebuttals, setRebuttals] = useState([]);
+  const [openReb, setOpenReb] = useState(null);
   const [listId, setListId] = useState('all');
   const [scriptId, setScriptId] = useState('');
   const [running, setRunning] = useState(false);
@@ -32,8 +34,11 @@ export default function PowerDialer() {
   const runningRef = useRef(false);
 
   useEffect(() => {
-    Promise.all([api('/config/lists'), api('/config/scripts')])
-      .then(([l, s]) => { setLists(l); setScripts(s.filter((x) => x.is_active)); })
+    Promise.all([api('/config/lists'), api('/config/scripts'), api('/config/rebuttals')])
+      .then(([l, s, rb]) => {
+        setLists(l); setScripts(s.filter((x) => x.is_active));
+        setRebuttals((rb || []).filter((x) => x.is_active));
+      })
       .catch((e) => setErr(e.message));
   }, []);
 
@@ -162,6 +167,24 @@ export default function PowerDialer() {
             {script && lead
               ? <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.6, fontSize: 15 }}>{mergeScript(script.body, lead)}</div>
               : <p className="muted">{scriptId ? 'Loading…' : 'No script selected.'}</p>}
+
+            {rebuttals.length > 0 && (
+              <div className="rebuttals">
+                <h3 style={{ marginTop: 22 }}>Rebuttals</h3>
+                {rebuttals.map((rb) => {
+                  const on = openReb === rb.id;
+                  return (
+                    <div key={rb.id} className={'reb' + (on ? ' open' : '')}>
+                      <button className="reb-head" onClick={() => setOpenReb(on ? null : rb.id)}>
+                        <span>{rb.title}</span>
+                        <span className="reb-chev">{on ? '−' : '+'}</span>
+                      </button>
+                      {on && <div className="reb-body">{lead ? mergeScript(rb.body, lead) : rb.body}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -190,6 +190,18 @@ button.side-link { width: 100%; text-align: left; background: transparent; borde
   white-space: pre-wrap; font-family: ui-monospace, Menlo, monospace; font-size: 13px; color: #1f2430; overflow-x: auto; }
 @media (max-width: 640px) { .partner-top { padding: 12px 16px; } .partner-main { padding: 18px 16px 48px; } }
 
+/* ---- Dialer rebuttals accordion ---- */
+.rebuttals { border-top: 1px solid var(--line); margin-top: 20px; }
+.reb { border: 1px solid var(--line); border-radius: 10px; margin-top: 8px; overflow: hidden; }
+.reb.open { border-color: var(--accent); }
+.reb-head { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  background: #fff; border: none; cursor: pointer; font-family: inherit; text-align: left;
+  padding: 11px 14px; font-weight: 700; color: var(--navy); font-size: 14px; }
+.reb-head:hover { background: var(--sky-50); }
+.reb.open .reb-head { background: var(--sky-50); }
+.reb-chev { color: var(--accent); font-weight: 800; font-size: 18px; line-height: 1; }
+.reb-body { padding: 4px 14px 14px; white-space: pre-wrap; line-height: 1.55; font-size: 14px; color: #1f2430; }
+
 /* ---- Filters ---- */
 .filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
 .filters input, .filters select {
