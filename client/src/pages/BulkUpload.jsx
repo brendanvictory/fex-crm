@@ -37,6 +37,7 @@ export default function BulkUpload() {
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [listsRefresh, setListsRefresh] = useState(0);
 
   useEffect(() => { api('/config/sources').then(setSources).catch(() => {}); }, []);
 
@@ -70,6 +71,7 @@ export default function BulkUpload() {
         body: JSON.stringify({ rows, source_id: sourceId || null, list_name: listName || null })
       });
       setResult(res);
+      setListsRefresh((n) => n + 1);
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
   }
 
@@ -138,7 +140,100 @@ export default function BulkUpload() {
             <div><button className="btn" onClick={() => navigate('/leads')}>View leads</button></div>
           </div>
         )}
+
+        <ManageLists refresh={listsRefresh} />
       </div>
     </Layout>
+  );
+}
+
+function ManageLists({ refresh }) {
+  const [lists, setLists] = useState([]);
+  const [err, setErr] = useState('');
+  const [confirming, setConfirming] = useState(null); // { list, summary }
+  const [confirmText, setConfirmText] = useState('');
+  const [alsoDelete, setAlsoDelete] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+
+  async function load() { try { setLists(await api('/config/lists')); } catch (e) { setErr(e.message); } }
+  useEffect(() => { load(); }, [refresh]);
+
+  async function openConfirm(list) {
+    setErr(''); setMsg(''); setConfirmText(''); setAlsoDelete(true);
+    try {
+      const summary = await api(`/config/lists/${list.id}/summary`);
+      setConfirming({ list, summary });
+    } catch (e) { setErr(e.message); }
+  }
+
+  async function purge() {
+    if (!confirming) return;
+    setBusy(true); setErr('');
+    try {
+      const res = await api(`/config/lists/${confirming.list.id}/purge`, {
+        method: 'POST', body: JSON.stringify({ protect_sold: true, delete_list: alsoDelete })
+      });
+      let m = `Removed ${res.deleted} lead${res.deleted === 1 ? '' : 's'} from “${confirming.list.name}”.`;
+      if (res.skipped_sold) m += ` ${res.skipped_sold} with a recorded sale were kept.`;
+      if (res.list_deleted) m += ' The list was deleted.';
+      setMsg(m); setConfirming(null); load();
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+
+  return (
+    <div className="card stack">
+      <div className="section-title">Manage lists</div>
+      <p className="muted" style={{ marginTop: 0 }}>Revert an upload by removing its leads. Leads with a recorded sale are always kept.</p>
+      {err && <p className="error">{err}</p>}
+      {msg && <p className="ok">{msg}</p>}
+
+      {lists.length === 0 ? <p className="muted" style={{ marginBottom: 0 }}>No lists yet.</p> : (
+        <div className="table-wrap">
+          <table className="data">
+            <thead><tr><th>List</th><th>Created</th><th>Leads</th><th></th></tr></thead>
+            <tbody>
+              {lists.map((l) => (
+                <tr key={l.id}>
+                  <td><strong>{l.name}</strong></td>
+                  <td className="muted">{new Date(l.created_at).toLocaleDateString()}</td>
+                  <td>{l.lead_count}</td>
+                  <td><button className="btn-ghost btn-sm" onClick={() => openConfirm(l)} disabled={l.lead_count === 0}>Revert / delete leads</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {confirming && (
+        <div className="modal-backdrop" onClick={() => setConfirming(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <div className="section-title">Revert “{confirming.list.name}”</div>
+            <p>
+              This permanently deletes <strong>{confirming.summary.total - confirming.summary.sold}</strong> lead
+              {confirming.summary.total - confirming.summary.sold === 1 ? '' : 's'} in this list.
+            </p>
+            <ul className="muted" style={{ marginTop: 0, fontSize: 14 }}>
+              <li>{confirming.summary.total} total in the list</li>
+              {confirming.summary.worked > 0 && <li>{confirming.summary.worked} have already been worked (called/dispositioned) — these will be deleted</li>}
+              {confirming.summary.sold > 0 && <li><strong>{confirming.summary.sold} have a recorded sale — these will be kept</strong></li>}
+            </ul>
+            <p className="muted" style={{ fontSize: 14 }}>This can’t be undone. Type the list name to confirm:</p>
+            <input value={confirmText} onChange={(e) => setConfirmText(e.target.value)} placeholder={confirming.list.name} />
+            <label className="checkbox-row" style={{ marginTop: 12 }}>
+              <input type="checkbox" checked={alsoDelete} onChange={(e) => setAlsoDelete(e.target.checked)} />
+              <span className="muted">Also delete the (now empty) list</span>
+            </label>
+            <div className="row-actions" style={{ marginTop: 16 }}>
+              <button className="sp-hang" style={{ flex: 'none' }} disabled={busy || confirmText.trim() !== confirming.list.name} onClick={purge}>
+                {busy ? 'Deleting…' : 'Delete leads'}
+              </button>
+              <button className="btn-ghost" onClick={() => setConfirming(null)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

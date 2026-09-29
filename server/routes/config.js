@@ -255,6 +255,63 @@ r.delete('/lists/:id', async (req, res) => {
   res.status(204).end();
 });
 
+// GET /lists/:id/summary — counts for the "revert upload" confirmation.
+r.get('/lists/:id/summary', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { data: list } = await supabaseAdmin.from('lead_lists')
+    .select('id, name, org_id').eq('id', req.params.id).eq('org_id', me.org_id).maybeSingle();
+  if (!list) return res.status(404).json({ error: 'list not found' });
+
+  const { count: total } = await supabaseAdmin.from('leads')
+    .select('id', { count: 'exact', head: true }).eq('list_id', list.id);
+  const { count: worked } = await supabaseAdmin.from('leads')
+    .select('id', { count: 'exact', head: true }).eq('list_id', list.id).eq('worked', true);
+  const { data: pols } = await supabaseAdmin.from('policies')
+    .select('lead_id, leads!inner(list_id)').eq('leads.list_id', list.id);
+  const sold = new Set((pols || []).map((p) => p.lead_id).filter(Boolean)).size;
+
+  res.json({ list: { id: list.id, name: list.name }, total: total || 0, worked: worked || 0, sold });
+});
+
+// POST /lists/:id/purge — delete the leads in a list ("revert upload").
+// Leads with a recorded sale are protected and never deleted.
+r.post('/lists/:id/purge', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const { data: list } = await supabaseAdmin.from('lead_lists')
+    .select('id, name, org_id').eq('id', req.params.id).eq('org_id', me.org_id).maybeSingle();
+  if (!list) return res.status(404).json({ error: 'list not found' });
+
+  const protectSold = req.body.protect_sold !== false; // default true
+  const { data: pols } = await supabaseAdmin.from('policies')
+    .select('lead_id, leads!inner(list_id)').eq('leads.list_id', list.id);
+  const soldIds = [...new Set((pols || []).map((p) => p.lead_id).filter(Boolean))];
+
+  let del = supabaseAdmin.from('leads').delete({ count: 'exact' })
+    .eq('list_id', list.id).eq('org_id', me.org_id);
+  if (protectSold && soldIds.length) del = del.not('id', 'in', `(${soldIds.join(',')})`);
+  const { error, count } = await del;
+  if (error) return res.status(400).json({ error: error.message });
+
+  let listDeleted = false;
+  if (req.body.delete_list) {
+    const { count: remaining } = await supabaseAdmin.from('leads')
+      .select('id', { count: 'exact', head: true }).eq('list_id', list.id);
+    if (!remaining) {
+      await supabaseAdmin.from('lead_lists').delete().eq('id', list.id).eq('org_id', me.org_id);
+      listDeleted = true;
+    }
+  }
+
+  await supabaseAdmin.from('activity_log').insert({
+    org_id: me.org_id, entity_type: 'lead_list', entity_id: list.id, actor_id: me.id,
+    action: 'purged_list', detail: { list: list.name, deleted: count || 0, protected_sold: protectSold ? soldIds.length : 0 }
+  });
+
+  res.json({ deleted: count || 0, skipped_sold: protectSold ? soldIds.length : 0, list_deleted: listDeleted });
+});
+
 // ---- Scripts ----
 r.get('/scripts', async (req, res) => {
   const org = await myOrg(req.user.id);
