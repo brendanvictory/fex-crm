@@ -23,6 +23,7 @@ import Policies from './pages/Policies.jsx';
 import Help from './pages/Help.jsx';
 import GettingStarted from './pages/GettingStarted.jsx';
 import Partners from './pages/Partners.jsx';
+import AgentActivity from './pages/AgentActivity.jsx';
 import PartnerPortal from './pages/PartnerPortal.jsx';
 import { api } from './api';
 import { DialerProvider } from './dialer/DialerContext.jsx';
@@ -75,6 +76,7 @@ export default function App() {
         <Route path="/policies" element={<Policies />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/revenue" element={<Revenue />} />
+        <Route path="/activity" element={<AgentActivity />} />
         <Route path="/commissions" element={<Commissions />} />
         <Route path="/schedule" element={<Schedule />} />
         <Route path="/voicemail" element={<Voicemails />} />

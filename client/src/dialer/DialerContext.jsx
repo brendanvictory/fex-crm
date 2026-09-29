@@ -99,14 +99,14 @@ export function DialerProvider({ children }) {
     };
   }, [initDevice, refreshToken]);
 
-  const connect = useCallback(async ({ lead_id, number, caller_id, displayLead }) => {
+  const connect = useCallback(async ({ lead_id, number, caller_id, displayLead, origin }) => {
     setError('');
     if (statusRef.current === 'connecting' || statusRef.current === 'in-call') return;
     const device = deviceRef.current || await initDevice();
     if (!device) return;
     await refreshToken(); // guarantee a live token for this call
     try {
-      const body = lead_id ? { lead_id, caller_id } : { number, caller_id };
+      const body = lead_id ? { lead_id, caller_id, origin } : { number, caller_id, origin };
       const res = await api('/calls/start', { method: 'POST', body: JSON.stringify(body) });
       setLead(displayLead || null);
       setStatus('connecting');
@@ -120,8 +120,8 @@ export function DialerProvider({ children }) {
     }
   }, [initDevice, wireCall, refreshToken]);
 
-  const startCall = useCallback((leadObj, callerId) => connect({ lead_id: leadObj.id, caller_id: callerId, displayLead: leadObj }), [connect]);
-  const startManualCall = useCallback((number, callerId) => connect({ number, caller_id: callerId, displayLead: { phone: number } }), [connect]);
+  const startCall = useCallback((leadObj, callerId, origin = 'lead') => connect({ lead_id: leadObj.id, caller_id: callerId, displayLead: leadObj, origin }), [connect]);
+  const startManualCall = useCallback((number, callerId, origin = 'manual') => connect({ number, caller_id: callerId, displayLead: { phone: number }, origin }), [connect]);
 
   const acceptIncoming = useCallback(() => {
     const inc = incoming; if (!inc) return;

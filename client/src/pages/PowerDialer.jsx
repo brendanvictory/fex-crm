@@ -59,7 +59,7 @@ export default function PowerDialer() {
   function doDial(theLead) {
     if (!theLead) return;
     awaitingRef.current = true;
-    dialer.startCall(theLead);
+    dialer.startCall(theLead, undefined, 'power_dialer');
   }
 
   async function loadNext() {

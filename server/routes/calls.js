@@ -59,7 +59,8 @@ async function resolveCaller(orgId, state, override) {
 // or to a manually typed number. Body: { lead_id } OR { number }, plus optional
 // caller_id to override the local-presence pick. Returns { call_id, to, caller_id }.
 r.post('/start', async (req, res) => {
-  const { lead_id, number, caller_id } = req.body;
+  const { lead_id, number, caller_id, origin } = req.body;
+  const validOrigin = ['power_dialer', 'manual', 'lead'].includes(origin) ? origin : null;
   const { data: me } = await supabaseAdmin.from('users').select('id, org_id').eq('id', req.user.id).single();
 
   if (lead_id) {
@@ -82,7 +83,8 @@ r.post('/start', async (req, res) => {
 
     const { data: call, error } = await supabaseAdmin.from('calls').insert({
       lead_id: lead.id, org_id: lead.org_id, agent_id: me.id,
-      direction: 'outbound', from_number: callerId, to_number: to, started_at: new Date().toISOString()
+      direction: 'outbound', from_number: callerId, to_number: to,
+      origin: validOrigin || 'lead', started_at: new Date().toISOString()
     }).select('id').single();
     if (error) return res.status(400).json({ error: error.message });
     await markWorked(supabaseAdmin, lead.id);
@@ -96,7 +98,8 @@ r.post('/start', async (req, res) => {
 
     const { data: call, error } = await supabaseAdmin.from('calls').insert({
       lead_id: null, org_id: me.org_id, agent_id: me.id,
-      direction: 'outbound', from_number: callerId, to_number: to, started_at: new Date().toISOString()
+      direction: 'outbound', from_number: callerId, to_number: to,
+      origin: validOrigin || 'manual', started_at: new Date().toISOString()
     }).select('id').single();
     if (error) return res.status(400).json({ error: error.message });
     return res.json({ call_id: call.id, to, caller_id: callerId });

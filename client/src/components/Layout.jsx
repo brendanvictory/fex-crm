@@ -48,6 +48,7 @@ const GROUPS = [
   ] },
   { key: 'insights', label: 'Insights', icon: 'insights', items: [
     { to: '/reports', label: 'Reports', icon: 'insights' },
+    { to: '/activity', label: 'Agent Activity', icon: 'queue' },
     { to: '/revenue', label: 'Revenue', icon: 'revenue' }
   ] },
   { key: 'support', label: 'Support', icon: 'support', items: [

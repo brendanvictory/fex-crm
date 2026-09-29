@@ -181,4 +181,101 @@ r.get('/summary', async (req, res) => {
   });
 });
 
+// GET /api/reports/activity — per-agent call productivity + trends.
+// Filters: from, to, origin ('power_dialer'|'manual'|'lead'|'all'), agent.
+// Role-scoped: admins see the org, managers their downline + self, agents self.
+r.get('/activity', async (req, res) => {
+  const { from, to, origin, agent } = req.query;
+  const { data: me } = await supabaseAdmin.from('users').select('id, role, org_id').eq('id', req.user.id).single();
+  if (!me) return res.status(400).json({ error: 'no profile' });
+
+  const { data: orgUsers } = await supabaseAdmin
+    .from('users').select('id, full_name, role, manager_id').eq('org_id', me.org_id);
+  let allowed;
+  if (me.role === 'super_admin' || me.role === 'admin') allowed = new Set((orgUsers || []).map((u) => u.id));
+  else if (me.role === 'manager') allowed = new Set([me.id, ...(orgUsers || []).filter((u) => u.manager_id === me.id).map((u) => u.id)]);
+  else allowed = new Set([me.id]);
+  const nameById = new Map((orgUsers || []).map((u) => [u.id, u.full_name]));
+
+  let q = supabaseAdmin.from('calls')
+    .select('agent_id, lead_id, duration_seconds, started_at, origin')
+    .eq('org_id', me.org_id).eq('direction', 'outbound').limit(100000);
+  if (from) q = q.gte('started_at', from);
+  if (to) q = q.lte('started_at', to);
+  if (origin && origin !== 'all') q = q.eq('origin', origin);
+  if (agent) q = q.eq('agent_id', agent);
+  const { data: calls, error } = await q;
+  if (error) return res.status(400).json({ error: error.message });
+
+  const rows = (calls || []).filter((c) => c.agent_id && allowed.has(c.agent_id));
+
+  const hourFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour: '2-digit', hourCycle: 'h23' });
+  const dowFmt = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', weekday: 'short' });
+  const DOW = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+  const A = new Map();
+  const ga = (id) => {
+    if (!A.has(id)) A.set(id, { id, name: nameById.get(id) || 'Unknown', dials: 0, leads: new Set(), connected: 0, talk: 0, days: new Map() });
+    return A.get(id);
+  };
+  const byDay = new Map();
+  const byHour = Array.from({ length: 24 }, (_, h) => ({ hour: h, dials: 0, connected: 0 }));
+  const byDow = Array.from({ length: 7 }, (_, d) => ({ dow: d, dials: 0, connected: 0 }));
+
+  for (const c of rows) {
+    const a = ga(c.agent_id);
+    a.dials++;
+    if (c.lead_id) a.leads.add(c.lead_id);
+    const dur = Number(c.duration_seconds || 0);
+    const isConn = dur > 0;
+    if (isConn) { a.connected++; a.talk += dur; }
+
+    const d = new Date(c.started_at);
+    const ms = d.getTime();
+    const dayKey = (c.started_at || '').slice(0, 10);
+    let dd = a.days.get(dayKey);
+    if (!dd) { dd = { min: ms, max: ms }; a.days.set(dayKey, dd); }
+    else { if (ms < dd.min) dd.min = ms; if (ms > dd.max) dd.max = ms; }
+
+    const bd = byDay.get(dayKey) || { dials: 0, connected: 0 };
+    bd.dials++; if (isConn) bd.connected++; byDay.set(dayKey, bd);
+
+    const h = parseInt(hourFmt.format(d), 10) % 24;
+    byHour[h].dials++; if (isConn) byHour[h].connected++;
+    const dw = DOW[dowFmt.format(d)] ?? 0;
+    byDow[dw].dials++; if (isConn) byDow[dw].connected++;
+  }
+
+  const agents = [...A.values()].map((a) => {
+    let activeMin = 0;
+    a.days.forEach((dd) => { activeMin += Math.max(0, dd.max - dd.min) / 60000; });
+    return {
+      id: a.id, name: a.name, dials: a.dials, unique_leads: a.leads.size,
+      connected: a.connected, connect_rate: a.dials ? Math.round((a.connected / a.dials) * 100) : 0,
+      talk_sec: a.talk, avg_duration_sec: a.connected ? Math.round(a.talk / a.connected) : 0,
+      active_min: Math.round(activeMin),
+      dials_per_hour: activeMin > 0 ? +(a.dials / (activeMin / 60)).toFixed(1) : null
+    };
+  }).sort((x, y) => y.dials - x.dials);
+
+  const totals = agents.reduce((t, a) => {
+    t.dials += a.dials; t.connected += a.connected; t.talk_sec += a.talk_sec;
+    t.active_min += a.active_min; t.unique_leads += a.unique_leads; return t;
+  }, { dials: 0, connected: 0, talk_sec: 0, active_min: 0, unique_leads: 0 });
+  totals.connect_rate = totals.dials ? Math.round((totals.connected / totals.dials) * 100) : 0;
+  totals.avg_duration_sec = totals.connected ? Math.round(totals.talk_sec / totals.connected) : 0;
+  totals.dials_per_hour = totals.active_min > 0 ? +(totals.dials / (totals.active_min / 60)).toFixed(1) : null;
+
+  const start = from ? new Date(from) : new Date(Date.now() - 29 * 864e5);
+  const end = to ? new Date(to) : new Date();
+  const by_day = [];
+  for (let d = new Date(start.toISOString().slice(0, 10)); d <= end; d = new Date(d.getTime() + 864e5)) {
+    const k = d.toISOString().slice(0, 10);
+    const bd = byDay.get(k) || { dials: 0, connected: 0 };
+    by_day.push({ day: k, dials: bd.dials, connected: bd.connected });
+  }
+
+  res.json({ agents, totals, by_day, by_hour: byHour, by_dow: byDow });
+});
+
 export default r;
