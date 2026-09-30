@@ -34,7 +34,7 @@ export function DialerProvider({ children }) {
     call.on('disconnect', () => {
       stopTimer(); setLead(null); callRef.current = null;
       if (meta.noDispo) { setStatus('idle'); }
-      else { setStatus('ended'); setDispoFor({ call_id: meta.call_id, lead: meta.displayLead || null }); }
+      else { setStatus('ended'); setDispoFor({ call_id: meta.call_id, lead: meta.displayLead || null, origin: meta.origin || null }); }
     });
     call.on('cancel', () => { stopTimer(); setStatus('idle'); setLead(null); callRef.current = null; });
     call.on('error', (e) => setError(e?.message || 'Call error'));
@@ -113,7 +113,7 @@ export function DialerProvider({ children }) {
       setMuted(false);
       setPanelOpen(true);
       const call = await device.connect({ params: { To: res.to, callerId: res.caller_id || '', call_id: res.call_id } });
-      wireCall(call, { call_id: res.call_id, displayLead: displayLead || { phone: res.to } });
+      wireCall(call, { call_id: res.call_id, displayLead: displayLead || { phone: res.to }, origin });
     } catch (e) {
       setStatus('idle'); setLead(null);
       setError(e.message || 'Could not place the call');
@@ -154,11 +154,22 @@ export function DialerProvider({ children }) {
   const closePhone = useCallback(() => { if (statusRef.current === 'idle') setPanelOpen(false); }, []);
   const closeDispo = useCallback(() => { setDispoFor(null); setStatus('idle'); setMuted(false); setSeconds(0); }, []);
 
+  // Redial the lead that just finished (from the disposition modal) without
+  // advancing the queue. Goes ended -> connecting, so the dialer's auto-advance
+  // (which fires only on 'idle') is skipped.
+  const callAgain = useCallback(() => {
+    const l = dispoFor?.lead;
+    const origin = dispoFor?.origin || 'power_dialer';
+    if (!l || !l.id) { setDispoFor(null); setStatus('idle'); setSeconds(0); return; }
+    setDispoFor(null); setSeconds(0); setMuted(false);
+    startCall(l, undefined, origin);
+  }, [dispoFor, startCall]);
+
   return (
     <Ctx.Provider value={{
       ready, status, lead, leadLabel, muted, seconds, error, setError,
       startCall, startManualCall, hangup, toggleMute, sendDigit,
-      dispoFor, closeDispo, panelOpen, openPhone, closePhone,
+      dispoFor, closeDispo, callAgain, panelOpen, openPhone, closePhone,
       incoming, acceptIncoming, rejectIncoming, recordGreeting
     }}>
       {children}

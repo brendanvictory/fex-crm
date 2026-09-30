@@ -11,7 +11,7 @@ export default function Softphone() {
   const {
     status, lead, leadLabel, muted, seconds, error, setError,
     startManualCall, hangup, toggleMute, sendDigit,
-    dispoFor, closeDispo, panelOpen, closePhone,
+    dispoFor, closeDispo, callAgain, panelOpen, closePhone,
     incoming, acceptIncoming, rejectIncoming
   } = useDialer();
 
@@ -113,12 +113,12 @@ export default function Softphone() {
         </div>
       )}
 
-      {dispoFor && <DispositionModal callId={dispoFor.call_id} lead={dispoFor.lead} onClose={closeDispo} />}
+      {dispoFor && <DispositionModal callId={dispoFor.call_id} lead={dispoFor.lead} onClose={closeDispo} onCallAgain={callAgain} />}
     </>
   );
 }
 
-function DispositionModal({ callId, lead, onClose }) {
+function DispositionModal({ callId, lead, onClose, onCallAgain }) {
   const [disps, setDisps] = useState([]);
   const [dispId, setDispId] = useState('');
   const [saving, setSaving] = useState(false);
@@ -126,13 +126,16 @@ function DispositionModal({ callId, lead, onClose }) {
 
   useEffect(() => { api('/config/dispositions').then((d) => setDisps(d.filter((x) => x.is_active))).catch(() => {}); }, []);
 
-  async function save() {
+  // Save the disposition, then either advance (next) or redial the same lead.
+  async function finish(after) {
     setSaving(true); setErr('');
     try {
       await api(`/calls/${callId}/disposition`, { method: 'PATCH', body: JSON.stringify({ disposition_id: dispId || null }) });
-      onClose();
+      after();
     } catch (e) { setErr(e.message); setSaving(false); }
   }
+
+  const canRedial = !!lead?.id;
 
   return (
     <div className="modal-backdrop">
@@ -147,9 +150,14 @@ function DispositionModal({ callId, lead, onClose }) {
             {disps.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
           </select>
         </div>
-        <div className="row-actions" style={{ marginTop: 18, justifyContent: 'flex-end' }}>
-          <button className="btn-ghost" onClick={onClose}>Skip</button>
-          <button className="btn" onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save outcome'}</button>
+        <div className="row-actions" style={{ marginTop: 18, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+          <button className="btn-ghost" onClick={onClose} disabled={saving}>Skip</button>
+          {canRedial && (
+            <button className="btn-ghost" onClick={() => finish(onCallAgain)} disabled={saving}>
+              {saving ? '…' : 'Call again'}
+            </button>
+          )}
+          <button className="btn" onClick={() => finish(onClose)} disabled={saving}>{saving ? 'Saving…' : 'Save & next call'}</button>
         </div>
       </div>
     </div>
