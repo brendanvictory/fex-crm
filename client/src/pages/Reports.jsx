@@ -3,6 +3,7 @@ import Layout from '../components/Layout.jsx';
 import StatTile from '../components/StatTile.jsx';
 import { TrendChart, BarList } from '../components/charts.jsx';
 import { api } from '../api';
+import { RANGE_OPTIONS, rangeToISO } from '../lib/ranges.js';
 
 export default function Reports() {
   const [rep, setRep] = useState(null);
@@ -10,6 +11,7 @@ export default function Reports() {
   const [sources, setSources] = useState([]);
   const [agents, setAgents] = useState([]);
   const [filters, setFilters] = useState({ from: '', to: '', state: '', source: '', status: '', owner: '' });
+  const [quick, setQuick] = useState(null); // active quick range, or null for custom/all
   const [err, setErr] = useState('');
 
   useEffect(() => {
@@ -19,19 +21,30 @@ export default function Reports() {
   }, []);
 
   useEffect(() => {
-    const qs = new URLSearchParams(Object.entries(filters).filter(([, v]) => v)).toString();
+    const eff = { ...filters };
+    if (quick) { const r = rangeToISO(quick); eff.from = r.from; eff.to = r.to; }
+    const qs = new URLSearchParams(Object.entries(eff).filter(([, v]) => v)).toString();
     const t = setTimeout(() => {
       api('/reports/summary' + (qs ? `?${qs}` : '')).then(setRep).catch((e) => setErr(e.message));
     }, 200);
     return () => clearTimeout(t);
-  }, [filters]);
+  }, [filters, quick]);
 
-  const set = (k) => (e) => setFilters((f) => ({ ...f, [k]: e.target.value }));
+  // Editing a date input switches to a custom range (clears the quick selection).
+  const set = (k) => (e) => { setQuick(null); setFilters((f) => ({ ...f, [k]: e.target.value })); };
+  function pickQuick(k) { setQuick(k); setFilters((f) => ({ ...f, from: '', to: '' })); }
 
   return (
     <Layout>
       <div className="page-head"><h1>Reports</h1></div>
       {err && <p className="error">{err}</p>}
+
+      <div className="segmented" style={{ flexWrap: 'wrap' }}>
+        {RANGE_OPTIONS.map((r) => (
+          <button key={r.k} className={'seg' + (quick === r.k ? ' active' : '')} onClick={() => pickQuick(r.k)}>{r.label}</button>
+        ))}
+        <button className={'seg' + (!quick ? ' active' : '')} onClick={() => setQuick(null)}>Custom</button>
+      </div>
 
       <div className="filters">
         <input type="date" value={filters.from} onChange={set('from')} title="From" />

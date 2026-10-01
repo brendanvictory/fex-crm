@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { TrendChart, BarList } from '../components/charts.jsx';
+import { RANGE_OPTIONS, rangeToISO } from '../lib/ranges.js';
 
 const money = (n) => (n == null ? '—' : '$' + Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 }));
 const pctStr = (n) => (n == null ? '—' : `${n}%`);
-const RANGES = [{ d: 7, label: '7 days' }, { d: 30, label: '30 days' }, { d: 90, label: '90 days' }];
 
 // features: which sections to show. Defaults to all.
 export default function PartnerDashboard({ sourceId = null, features = {} }) {
   const f = { core: true, sales: true, returns: true, posting: true, ...features };
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState(30);
   const [ov, setOv] = useState(null);
   const [series, setSeries] = useState([]);
   const [disps, setDisps] = useState([]);
@@ -20,8 +20,8 @@ export default function PartnerDashboard({ sourceId = null, features = {} }) {
 
   function qs(extra = {}) {
     const p = new URLSearchParams();
-    const from = new Date(Date.now() - days * 864e5).toISOString();
-    p.set('from', from);
+    const { from, to } = rangeToISO(range);
+    p.set('from', from); p.set('to', to);
     if (sourceId) p.set('source', sourceId);
     Object.entries(extra).forEach(([k, v]) => p.set(k, v));
     return p.toString();
@@ -41,7 +41,7 @@ export default function PartnerDashboard({ sourceId = null, features = {} }) {
       setOv(o); setSeries(t); setDisps(d); setRejects(r); setReturns(ret);
     }).catch((e) => !cancelled && setErr(e.message));
     return () => { cancelled = true; };
-  }, [days, sourceId]); // eslint-disable-line
+  }, [range, sourceId]); // eslint-disable-line
 
   if (err) return <p className="error">{err}</p>;
   if (!ov) return <p className="muted">Loading…</p>;
@@ -52,9 +52,9 @@ export default function PartnerDashboard({ sourceId = null, features = {} }) {
 
   return (
     <div className="stack">
-      <div className="segmented" style={{ justifyContent: 'flex-end', marginBottom: 4 }}>
-        {RANGES.map((r) => (
-          <button key={r.d} className={'seg' + (days === r.d ? ' active' : '')} onClick={() => setDays(r.d)}>{r.label}</button>
+      <div className="segmented" style={{ justifyContent: 'flex-end', marginBottom: 4, flexWrap: 'wrap' }}>
+        {RANGE_OPTIONS.map((r) => (
+          <button key={r.k} className={'seg' + (range === r.k ? ' active' : '')} onClick={() => setRange(r.k)}>{r.label}</button>
         ))}
       </div>
 

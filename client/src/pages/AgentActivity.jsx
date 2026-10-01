@@ -3,8 +3,7 @@ import Layout from '../components/Layout.jsx';
 import StatTile from '../components/StatTile.jsx';
 import { TrendChart, BarList } from '../components/charts.jsx';
 import { api } from '../api';
-
-const RANGES = [{ d: 7, label: '7 days' }, { d: 30, label: '30 days' }, { d: 90, label: '90 days' }];
+import { RANGE_OPTIONS, rangeToISO } from '../lib/ranges.js';
 const ORIGINS = [
   { v: 'power_dialer', label: 'Power dialer' },
   { v: 'all', label: 'All calls' },
@@ -25,7 +24,7 @@ const mmss = (sec) => { sec = Number(sec || 0); const m = Math.floor(sec / 60), 
 const activeLabel = (min) => { min = Number(min || 0); const h = Math.floor(min / 60), m = min % 60; return h ? `${h}h ${m}m` : `${m}m`; };
 
 export default function AgentActivity() {
-  const [days, setDays] = useState(30);
+  const [range, setRange] = useState(30);
   const [origin, setOrigin] = useState('power_dialer');
   const [agent, setAgent] = useState('');
   const [agents, setAgents] = useState([]);
@@ -35,13 +34,13 @@ export default function AgentActivity() {
   useEffect(() => { api('/config/agents').then(setAgents).catch(() => {}); }, []);
 
   useEffect(() => {
-    const from = new Date(Date.now() - days * 864e5).toISOString();
-    const p = new URLSearchParams({ from, origin });
+    const { from, to } = rangeToISO(range);
+    const p = new URLSearchParams({ from, to, origin });
     if (agent) p.set('agent', agent);
     setRep(null);
     const t = setTimeout(() => { api(`/reports/activity?${p.toString()}`).then(setRep).catch((e) => setErr(e.message)); }, 150);
     return () => clearTimeout(t);
-  }, [days, origin, agent]);
+  }, [range, origin, agent]);
 
   const t = rep?.totals;
   const hourData = (rep?.by_hour || []).filter((h) => h.dials > 0).map((h) => ({ label: hourLabel(h.hour), count: h.connected }));
@@ -54,7 +53,7 @@ export default function AgentActivity() {
 
       <div className="filters">
         <div className="segmented" style={{ margin: 0 }}>
-          {RANGES.map((r) => <button key={r.d} className={'seg' + (days === r.d ? ' active' : '')} onClick={() => setDays(r.d)}>{r.label}</button>)}
+          {RANGE_OPTIONS.map((r) => <button key={r.k} className={'seg' + (range === r.k ? ' active' : '')} onClick={() => setRange(r.k)}>{r.label}</button>)}
         </div>
         <select value={origin} onChange={(e) => setOrigin(e.target.value)}>
           {ORIGINS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
