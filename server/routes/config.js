@@ -62,7 +62,7 @@ r.get('/dispositions', async (req, res) => {
 });
 
 r.post('/dispositions', async (req, res) => {
-  const body = { name: req.body.name, maps_to_status_id: req.body.maps_to_status_id || null, is_active: req.body.is_active ?? true };
+  const body = { name: req.body.name, maps_to_status_id: req.body.maps_to_status_id || null, is_active: req.body.is_active ?? true, is_contact: !!req.body.is_contact };
   const { data, error } = await req.sb.from('call_dispositions').insert(body).select().single();
   if (error) return res.status(400).json({ error: error.message });
   res.status(201).json(data);
@@ -70,7 +70,7 @@ r.post('/dispositions', async (req, res) => {
 
 r.patch('/dispositions/:id', async (req, res) => {
   const patch = {};
-  for (const k of ['name', 'maps_to_status_id', 'is_active']) if (k in req.body) patch[k] = req.body[k];
+  for (const k of ['name', 'maps_to_status_id', 'is_active', 'is_contact']) if (k in req.body) patch[k] = req.body[k];
   const { data, error } = await req.sb.from('call_dispositions').update(patch).eq('id', req.params.id).select().single();
   if (error) return res.status(400).json({ error: error.message });
   res.json(data);

@@ -116,13 +116,22 @@ r.patch('/:id/disposition', async (req, res) => {
   if (error) return res.status(400).json({ error: error.message });
 
   let advanced = null;
+  let claimed = false;
   if (disposition_id) {
     const { data: disp } = await supabaseAdmin
-      .from('call_dispositions').select('name, maps_to_status_id').eq('id', disposition_id).single();
+      .from('call_dispositions').select('name, maps_to_status_id, is_contact').eq('id', disposition_id).single();
     if (disp?.maps_to_status_id && call.lead_id) {
       await supabaseAdmin.from('leads')
         .update({ status_id: disp.maps_to_status_id, updated_at: new Date().toISOString() }).eq('id', call.lead_id);
       advanced = disp.maps_to_status_id;
+    }
+    // Contact made → claim the lead to the agent who dialed it, but only if it's
+    // still unclaimed (don't steal another agent's lead).
+    if (disp?.is_contact && call.lead_id && call.agent_id) {
+      const { data: owned } = await supabaseAdmin.from('leads')
+        .update({ owner_id: call.agent_id, updated_at: new Date().toISOString() })
+        .eq('id', call.lead_id).is('owner_id', null).select('id').maybeSingle();
+      if (owned) claimed = true;
     }
     if (call.lead_id) {
       await supabaseAdmin.from('activity_log').insert({
@@ -131,7 +140,7 @@ r.patch('/:id/disposition', async (req, res) => {
       });
     }
   }
-  res.json({ ok: true, advanced });
+  res.json({ ok: true, advanced, claimed });
 });
 
 // GET /api/calls/lookup?number= — resolve an inbound caller to a lead (for the

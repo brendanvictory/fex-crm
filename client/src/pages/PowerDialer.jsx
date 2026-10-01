@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Layout from '../components/Layout.jsx';
 import { api } from '../api';
 import { useDialer } from '../dialer/DialerContext.jsx';
@@ -63,17 +63,27 @@ export default function PowerDialer() {
     dialer.startCall(theLead, undefined, 'power_dialer');
   }
 
-  async function loadNext() {
+  async function loadNext(listOverride) {
     setErr(''); setLead(null); leadRef.current = null; setDone(null);
     try {
-      const res = await api('/dialer/next', { method: 'POST', body: JSON.stringify({ list_id: listId }) });
+      const res = await api('/dialer/next', { method: 'POST', body: JSON.stringify({ list_id: listOverride || listId }) });
       if (res.done) { setDone(res); setRunning(false); runningRef.current = false; return; }
       setLead(res.lead); leadRef.current = res.lead;
       scheduleDial(res.lead);
     } catch (e) { setErr(e.message); }
   }
 
-  function start() { setRunning(true); runningRef.current = true; loadNext(); }
+  function start(listOverride) {
+    if (listOverride) setListId(listOverride);
+    setRunning(true); runningRef.current = true;
+    loadNext(listOverride);
+  }
+
+  // One-click launch from the Queue: /dialer?mode=unclaimed starts a fresh session.
+  const [params] = useSearchParams();
+  useEffect(() => {
+    if (params.get('mode') === 'unclaimed' && !runningRef.current) start('unclaimed');
+  }, []); // eslint-disable-line
   function callNow() { clearCountdown(); doDial(leadRef.current); }
   function pause() { clearCountdown(); }
   function skip() { clearCountdown(); awaitingRef.current = false; loadNext(); }
@@ -107,6 +117,7 @@ export default function PowerDialer() {
           <div className="field">
             <label>List to dial</label>
             <select value={listId} onChange={(e) => setListId(e.target.value)}>
+              <option value="unclaimed">🔥 Fresh unclaimed leads (newest first)</option>
               <option value="all">All leads</option>
               {lists.map((l) => <option key={l.id} value={l.id}>{l.name}{l.lead_count != null ? ` (${l.lead_count})` : ''}</option>)}
             </select>
@@ -121,7 +132,8 @@ export default function PowerDialer() {
           <div><button className="btn" onClick={start}>Start dialing</button></div>
           {done && (
             <p className="muted">
-              {done.reason === 'empty' && 'This list has no leads yet — if you just uploaded it, the rows may have been skipped as duplicates. Try "All leads" or check the import result.'}
+              {done.reason === 'empty' && listId === 'unclaimed' && 'No unclaimed leads to dial right now — new vendor leads appear here as they post in. Leave this open and hit Start again in a bit.'}
+              {done.reason === 'empty' && listId !== 'unclaimed' && 'This list has no leads yet — if you just uploaded it, the rows may have been skipped as duplicates. Try "All leads" or check the import result.'}
               {done.reason === 'after_hours' && `All ${done.total} lead(s) in this list are outside their local calling hours right now. Calling is allowed 8am–9pm in each lead's timezone — they'll be dialable once it's 8am where they are.`}
               {done.reason === 'busy' && 'All leads in this list are currently being dialed by other agents.'}
               {!['empty', 'after_hours', 'busy'].includes(done.reason) && 'Nothing left to dial right now.'}

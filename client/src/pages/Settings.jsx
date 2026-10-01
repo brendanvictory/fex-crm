@@ -69,7 +69,7 @@ export default function Settings() {
   }
 
   async function saveDisp(d) {
-    try { await api(`/config/dispositions/${d.id}`, { method: 'PATCH', body: JSON.stringify({ name: d.name, maps_to_status_id: d.maps_to_status_id || null, is_active: d.is_active }) }); load(); }
+    try { await api(`/config/dispositions/${d.id}`, { method: 'PATCH', body: JSON.stringify({ name: d.name, maps_to_status_id: d.maps_to_status_id || null, is_active: d.is_active, is_contact: d.is_contact }) }); load(); }
     catch (e) { setErr(e.message); }
   }
   async function delDisp(id) { try { await api(`/config/dispositions/${id}`, { method: 'DELETE' }); load(); } catch (e) { setErr(e.message); } }
@@ -158,7 +158,7 @@ export default function Settings() {
           <div className="section-title">Call dispositions</div>
           <div className="table-wrap">
             <table className="data">
-              <thead><tr><th>Name</th><th>Advances status to</th><th>Active</th><th></th></tr></thead>
+              <thead><tr><th>Name</th><th>Advances status to</th><th>Active</th><th>Contact?</th><th></th></tr></thead>
               <tbody>
                 {disps.map((d) => (
                   <tr key={d.id}>
@@ -170,6 +170,7 @@ export default function Settings() {
                       </select>
                     </td>
                     <td><input type="checkbox" checked={!!d.is_active} onChange={(e) => editDisp(d.id, { is_active: e.target.checked })} /></td>
+                    <td><input type="checkbox" checked={!!d.is_contact} onChange={(e) => editDisp(d.id, { is_contact: e.target.checked })} title="Reached a live person — claims an unclaimed lead to the agent" /></td>
                     <td><div className="row-actions">
                       <button className="btn-ghost btn-sm" onClick={() => saveDisp(d)}>Save</button>
                       <button className="btn-ghost btn-sm" onClick={() => delDisp(d.id)}>Delete</button>
@@ -187,6 +188,7 @@ export default function Settings() {
             </select>
             <button className="btn" type="submit">Add disposition</button>
           </form>
+          <p className="muted" style={{ marginBottom: 0 }}>“Contact?” marks outcomes that mean you reached a live person. When an agent logs a contact outcome on an <strong>unclaimed</strong> lead, that lead is claimed to them; no-answers and voicemails stay in the shared pool.</p>
         </div>
 
         <div className="card">

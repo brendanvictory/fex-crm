@@ -60,7 +60,10 @@ export default function Queue() {
     <Layout fluid>
       <div className="page-head">
         <h1>My Queue</h1>
-        <button className="btn-ghost" onClick={load}>Refresh</button>
+        <div className="row-actions">
+          <button className="call-btn" onClick={() => navigate('/dialer?mode=unclaimed')}>🔥 Dial fresh leads</button>
+          <button className="btn-ghost" onClick={load}>Refresh</button>
+        </div>
       </div>
       {err && <p className="error">{err}</p>}
       <p className="muted" style={{ marginTop: -8 }}>Drag a lead across stages to update its status. Drag from <strong>Unclaimed</strong> to claim it to yourself.</p>
@@ -77,6 +80,10 @@ export default function Queue() {
                 <span className="kanban-title"><span className="kanban-dot" style={{ background: col.color }} />{col.title}</span>
                 <span className="kanban-count">{col.cards.length}</span>
               </div>
+              {col.key === 'unclaimed' && col.cards.length > 0 && (
+                <button className="btn-sm call-btn" style={{ width: '100%', marginBottom: 8 }}
+                  onClick={() => navigate('/dialer?mode=unclaimed')}>Dial newest first →</button>
+              )}
               {col.cards.map((c) => (
                 <div key={c.id} className="kanban-card" draggable
                   onDragStart={() => setDrag({ id: c.id, unclaimed: c.unclaimed })}

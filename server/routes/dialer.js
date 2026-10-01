@@ -19,15 +19,25 @@ r.post('/next', async (req, res) => {
 
   await supabaseAdmin.from('leads').update({ locked_by: null, locked_at: null }).eq('locked_by', me.id);
 
+  // 'unclaimed' = the shared pool of unassigned leads, dialed NEWEST first
+  // (speed-to-lead for real-time vendor posts). Otherwise dial a list / all,
+  // oldest-untouched first.
+  const unclaimed = list_id === 'unclaimed';
   const staleCut = new Date(Date.now() - STALE_MS).toISOString();
   let q = supabaseAdmin.from('leads')
     .select('*')
     .eq('org_id', me.org_id).eq('dnc', false)
-    .or(`locked_by.is.null,locked_at.lt.${staleCut}`)
-    .order('last_dialed_at', { ascending: true, nullsFirst: true })
-    .order('created_at', { ascending: true })
-    .limit(25);
-  if (list_id && list_id !== 'all') q = q.eq('list_id', list_id);
+    .or(`locked_by.is.null,locked_at.lt.${staleCut}`);
+  if (unclaimed) {
+    q = q.is('owner_id', null)
+      .order('last_dialed_at', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: false }); // newest unclaimed first
+  } else {
+    q = q.order('last_dialed_at', { ascending: true, nullsFirst: true })
+      .order('created_at', { ascending: true });
+    if (list_id && list_id !== 'all') q = q.eq('list_id', list_id);
+  }
+  q = q.limit(25);
 
   const { data: cands, error } = await q;
   if (error) return res.status(400).json({ error: error.message });
@@ -54,7 +64,8 @@ r.post('/next', async (req, res) => {
 
   // Nothing dialable — say why.
   let total = supabaseAdmin.from('leads').select('id', { count: 'exact', head: true }).eq('org_id', me.org_id).eq('dnc', false);
-  if (list_id && list_id !== 'all') total = total.eq('list_id', list_id);
+  if (unclaimed) total = total.is('owner_id', null);
+  else if (list_id && list_id !== 'all') total = total.eq('list_id', list_id);
   const { count } = await total;
   const reason = (count || 0) === 0 ? 'empty' : (skippedWindow > 0 ? 'after_hours' : 'busy');
   res.json({ done: true, reason, total: count || 0 });
