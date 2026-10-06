@@ -74,9 +74,11 @@ export default function PowerDialer() {
   }
 
   function start(listOverride) {
-    if (listOverride) setListId(listOverride);
+    // Only honor a string override (e.g. 'unclaimed'); a click event isn't one.
+    const override = typeof listOverride === 'string' ? listOverride : undefined;
+    if (override) setListId(override);
     setRunning(true); runningRef.current = true;
-    loadNext(listOverride);
+    loadNext(override);
   }
 
   // One-click launch from the Queue: /dialer?mode=unclaimed starts a fresh session.
@@ -129,7 +131,7 @@ export default function PowerDialer() {
               {scripts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
-          <div><button className="btn" onClick={start}>Start dialing</button></div>
+          <div><button className="btn" onClick={() => start()}>Start dialing</button></div>
           {done && (
             <p className="muted">
               {done.reason === 'empty' && listId === 'unclaimed' && 'No unclaimed leads to dial right now — new vendor leads appear here as they post in. Leave this open and hit Start again in a bit.'}
