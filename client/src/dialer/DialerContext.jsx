@@ -67,9 +67,17 @@ export function DialerProvider({ children }) {
       // still has time to renew before the token actually lapses.
       const device = new Device(token, { codecPreferences: ['opus', 'pcmu'], logLevel: 'error', tokenRefreshMs: 180000 });
       device.on('error', (e) => {
+        const code = e?.code;
         // Expired/invalid token errors are recoverable — renew silently instead
         // of alarming the agent with a red toast.
-        if ([20104, 20103, 31204, 31205].includes(e?.code)) { refreshToken(); return; }
+        if ([20104, 20103, 31204, 31205].includes(code)) { refreshToken(); return; }
+        // Idle signaling/connection drops (the websocket going stale after the
+        // tab sits unused) recover on their own — re-register quietly, no toast.
+        // Only suppress while idle; a connection error during a live call is real.
+        if ([31005, 31009, 31000, 53000, 53001].includes(code) && statusRef.current === 'idle') {
+          Promise.resolve(deviceRef.current?.register?.()).catch(() => {});
+          return;
+        }
         setError(e?.message || 'Phone error');
       });
       device.on('incoming', handleIncoming);
@@ -89,7 +97,13 @@ export function DialerProvider({ children }) {
     // Belt-and-suspenders: renew well inside the 1-hour TTL, and whenever the
     // tab regains focus (background tabs throttle timers and miss the event).
     const poll = setInterval(() => { refreshToken(); }, 25 * 60 * 1000);
-    const onVis = () => { if (document.visibilityState === 'visible') refreshToken(); };
+    // Coming back to the tab: refresh the token and re-establish the signaling
+    // connection if it went stale while idle, so the agent doesn't hit an error.
+    const onVis = () => {
+      if (document.visibilityState !== 'visible') return;
+      refreshToken();
+      if (statusRef.current === 'idle') Promise.resolve(deviceRef.current?.register?.()).catch(() => {});
+    };
     document.addEventListener('visibilitychange', onVis);
     return () => {
       clearInterval(poll);
