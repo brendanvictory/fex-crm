@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import Layout from '../components/Layout.jsx';
 import { api } from '../api';
+import { openVendorSpec } from '../lib/vendorSpec.js';
 
 const BLANK = {
   name: '', source_id: '', type: 'ping', cost_per_call: '', buffer_seconds: 90,
@@ -120,6 +121,7 @@ export default function Campaigns() {
                     ? <div className="row-actions"><code className="key" style={{ fontSize: 11 }}>{(c.ping_key || '').slice(0, 10)}…</code><button className="btn-ghost btn-sm" onClick={() => navigator.clipboard?.writeText(c.ping_key)}>Copy</button><button className="btn-ghost btn-sm" onClick={() => rotate(c.id)}>Rotate</button></div>
                     : <span className="muted">—</span>}</td>
                   <td><div className="row-actions">
+                    <button className="btn-ghost btn-sm" onClick={() => openVendorSpec(c)}>Vendor spec</button>
                     <button className="btn-ghost btn-sm" onClick={() => editCampaign(c)}>Edit</button>
                     <button className="btn-ghost btn-sm" onClick={() => remove(c.id)}>Delete</button>
                   </div></td>
