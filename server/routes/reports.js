@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../supabase.js';
+import { etDate, etDays } from '../lib/time.js';
 
 const r = Router();
 
@@ -65,14 +66,9 @@ r.get('/revenue', async (req, res) => {
   }
 
   const dayMap = {};
-  for (const p of policies) { const d = (p.sold_at || '').slice(0, 10); if (d) dayMap[d] = (dayMap[d] || 0) + Number(p.annual_premium || 0); }
-  const start = from ? new Date(from) : new Date(Date.now() - 29 * 864e5);
-  const end = to ? new Date(to) : new Date();
-  const by_day = [];
-  for (let d = new Date(start.toISOString().slice(0, 10)); d <= end; d = new Date(d.getTime() + 864e5)) {
-    const k = d.toISOString().slice(0, 10);
-    by_day.push({ day: k, premium: +(dayMap[k] || 0).toFixed(2) });
-  }
+  for (const p of policies) { if (p.sold_at) { const d = etDate(p.sold_at); dayMap[d] = (dayMap[d] || 0) + Number(p.annual_premium || 0); } }
+  const by_day = etDays(from || new Date(Date.now() - 29 * 864e5).toISOString(), to || new Date().toISOString())
+    .map((k) => ({ day: k, premium: +(dayMap[k] || 0).toFixed(2) }));
 
   const inForce = policies.filter((p) => ['issued', 'in_force'].includes(p.status)).length;
   const lapsed = policies.filter((p) => ['lapsed', 'nsf', 'cancelled'].includes(p.status)).length;
@@ -151,19 +147,11 @@ r.get('/summary', async (req, res) => {
   const by_status = group((l) => l.status_id, (k) => (k === '__none__' ? 'No status' : statusName.get(k) || 'Unknown'));
   const by_agent = group((l) => l.owner_id, (k) => (k === '__none__' ? 'Unassigned' : agentName.get(k) || 'Unknown'));
 
-  // --- by day, gap-filled across the range ---
-  const dayCount = new Map();
-  for (const l of leads) {
-    const d = (l.created_at || '').slice(0, 10);
-    if (d) dayCount.set(d, (dayCount.get(d) || 0) + 1);
-  }
-  const start = from ? new Date(from) : new Date(Date.now() - 29 * 864e5);
-  const end = to ? new Date(to) : new Date();
-  const by_day = [];
-  for (let d = new Date(start); d <= end; d = new Date(d.getTime() + 864e5)) {
-    const key = d.toISOString().slice(0, 10);
-    by_day.push({ day: key, count: dayCount.get(key) || 0 });
-  }
+  // --- by day (Eastern), gap-filled across the range ---
+  const dayCount = {};
+  for (const l of leads) { if (l.created_at) { const d = etDate(l.created_at); dayCount[d] = (dayCount[d] || 0) + 1; } }
+  const by_day = etDays(from || new Date(Date.now() - 29 * 864e5).toISOString(), to || new Date().toISOString())
+    .map((key) => ({ day: key, count: dayCount[key] || 0 }));
 
   const total = leads.length;
   const contacted = leads.filter(isContacted).length;
@@ -232,7 +220,7 @@ r.get('/activity', async (req, res) => {
 
     const d = new Date(c.started_at);
     const ms = d.getTime();
-    const dayKey = (c.started_at || '').slice(0, 10);
+    const dayKey = etDate(c.started_at);
     let dd = a.days.get(dayKey);
     if (!dd) { dd = { min: ms, max: ms }; a.days.set(dayKey, dd); }
     else { if (ms < dd.min) dd.min = ms; if (ms > dd.max) dd.max = ms; }
@@ -266,14 +254,8 @@ r.get('/activity', async (req, res) => {
   totals.avg_duration_sec = totals.connected ? Math.round(totals.talk_sec / totals.connected) : 0;
   totals.dials_per_hour = totals.active_min > 0 ? +(totals.dials / (totals.active_min / 60)).toFixed(1) : null;
 
-  const start = from ? new Date(from) : new Date(Date.now() - 29 * 864e5);
-  const end = to ? new Date(to) : new Date();
-  const by_day = [];
-  for (let d = new Date(start.toISOString().slice(0, 10)); d <= end; d = new Date(d.getTime() + 864e5)) {
-    const k = d.toISOString().slice(0, 10);
-    const bd = byDay.get(k) || { dials: 0, connected: 0 };
-    by_day.push({ day: k, dials: bd.dials, connected: bd.connected });
-  }
+  const by_day = etDays(from || new Date(Date.now() - 29 * 864e5).toISOString(), to || new Date().toISOString())
+    .map((k) => { const bd = byDay.get(k) || { dials: 0, connected: 0 }; return { day: k, dials: bd.dials, connected: bd.connected }; });
 
   res.json({ agents, totals, by_day, by_hour: byHour, by_dow: byDow });
 });
@@ -334,19 +316,13 @@ r.get('/inbound', async (req, res) => {
       if (isGross) bySource[sk].gross++;
       if (x.billable) { bySource[sk].billable++; bySource[sk].spend += payCost; }
 
-      const d = (x.started_at || x.created_at || '').slice(0, 10);
+      const d = (x.started_at || x.created_at) ? etDate(x.started_at || x.created_at) : null;
       if (d) { (byDay[d] ||= { day: d, gross: 0, billable: 0, spend: 0 }); if (isGross) byDay[d].gross++; if (x.billable) { byDay[d].billable++; byDay[d].spend += payCost; } }
     }
   }
 
-  const start = from ? new Date(from) : new Date(Date.now() - 29 * 864e5);
-  const end = to ? new Date(to) : new Date();
-  const by_day = [];
-  for (let d = new Date(start.toISOString().slice(0, 10)); d <= end; d = new Date(d.getTime() + 864e5)) {
-    const k = d.toISOString().slice(0, 10);
-    const row = byDay[k] || { day: k, gross: 0, billable: 0, spend: 0 };
-    by_day.push({ day: k, gross: row.gross, billable: row.billable, spend: +row.spend.toFixed(2) });
-  }
+  const by_day = etDays(from || new Date(Date.now() - 29 * 864e5).toISOString(), to || new Date().toISOString())
+    .map((k) => { const row = byDay[k] || { gross: 0, billable: 0, spend: 0 }; return { day: k, gross: row.gross, billable: row.billable, spend: +row.spend.toFixed(2) }; });
 
   res.json({
     totals: {

@@ -1,6 +1,7 @@
 // Shared helpers for inbound pay-per-call routing & billing.
 import { supabaseAdmin } from '../supabase.js';
 import { normalizePhone } from './leads.js';
+import { etDayStartUTC, etMonthStartUTC } from './time.js';
 
 export const PRESENCE_FRESH_MS = 90 * 1000; // ignore "available" agents whose tab went silent
 
@@ -39,14 +40,11 @@ export async function capsOk(campaign) {
       .select('cost').eq('campaign_id', campaign.id).eq('billable', true).gte('billable_at', sinceISO);
     return (data || []).reduce((s, r) => s + Number(r.cost || 0), 0);
   };
-  const now = new Date();
   if (campaign.daily_cap != null) {
-    const startDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())).toISOString();
-    if (await sumCost(startDay) + Number(campaign.cost_per_call || 0) > Number(campaign.daily_cap)) return { ok: false, reason: 'cap' };
+    if (await sumCost(etDayStartUTC()) + Number(campaign.cost_per_call || 0) > Number(campaign.daily_cap)) return { ok: false, reason: 'cap' };
   }
   if (campaign.monthly_cap != null) {
-    const startMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
-    if (await sumCost(startMonth) + Number(campaign.cost_per_call || 0) > Number(campaign.monthly_cap)) return { ok: false, reason: 'cap' };
+    if (await sumCost(etMonthStartUTC()) + Number(campaign.cost_per_call || 0) > Number(campaign.monthly_cap)) return { ok: false, reason: 'cap' };
   }
   return { ok: true };
 }

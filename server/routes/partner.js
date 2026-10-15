@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { supabaseAdmin } from '../supabase.js';
+import { etDate, etDays } from '../lib/time.js';
 
 const r = Router();
 
@@ -124,11 +125,11 @@ r.get('/timeseries', async (req, res) => {
     .order('created_at');
   const byDay = {};
   (posts || []).forEach((p) => {
-    const d = p.created_at.slice(0, 10);
+    const d = etDate(p.created_at);
     byDay[d] = byDay[d] || { date: d, posted: 0, accepted: 0, rejected: 0, duplicate: 0 };
     byDay[d].posted++; byDay[d][p.status] = (byDay[d][p.status] || 0) + 1;
   });
-  res.json(Object.values(byDay));
+  res.json(Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date)));
 });
 
 // GET /dispositions — outcome breakdown for the cohort
@@ -208,16 +209,11 @@ r.get('/inbound', async (req, res) => {
     const pay = x.billable && !credited(x) ? Number(x.cost || 0) : 0;
     payable += pay;
     if (credited(x)) creditedAmt += Number(x.cost || 0);
-    const d = (x.started_at || x.created_at || '').slice(0, 10);
+    const d = (x.started_at || x.created_at) ? etDate(x.started_at || x.created_at) : null;
     if (d && (isGross || x.billable)) { (byDay[d] ||= { day: d, gross: 0, billable: 0, spend: 0 }); if (isGross) byDay[d].gross++; if (x.billable) { byDay[d].billable++; byDay[d].spend += pay; } }
   }
-  const start = new Date(fromISO), end = new Date(toISO);
-  const by_day = [];
-  for (let d = new Date(start.toISOString().slice(0, 10)); d <= end; d = new Date(d.getTime() + 864e5)) {
-    const k = d.toISOString().slice(0, 10);
-    const row = byDay[k] || { day: k, gross: 0, billable: 0, spend: 0 };
-    by_day.push({ day: k, gross: row.gross, billable: row.billable, spend: +row.spend.toFixed(2) });
-  }
+  const by_day = etDays(fromISO, toISO)
+    .map((k) => { const row = byDay[k] || { gross: 0, billable: 0, spend: 0 }; return { day: k, gross: row.gross, billable: row.billable, spend: +row.spend.toFixed(2) }; });
   res.json({
     totals: { gross, billable, payable: +payable.toFixed(2), credited: +creditedAmt.toFixed(2) },
     by_day
