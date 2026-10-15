@@ -188,4 +188,40 @@ r.get('/returns', async (req, res) => {
   res.json(out);
 });
 
+// GET /partner/inbound — inbound pay-per-call stats for this source (vendor view).
+r.get('/inbound', async (req, res) => {
+  const s = await resolveSource(req, res); if (!s) return;
+  const { fromISO, toISO } = range(req);
+  const { data: rows } = await supabaseAdmin.from('inbound_calls')
+    .select('status, billable, cost, disputed, dispute_status, started_at, created_at')
+    .eq('source_id', s.id).gte('created_at', fromISO).lte('created_at', toISO);
+  const R = rows || [];
+  const GROSS = new Set(['ringing', 'answered', 'completed', 'voicemail', 'abandoned']);
+  const credited = (x) => x.disputed && x.dispute_status === 'credited';
+
+  let gross = 0, billable = 0, payable = 0, creditedAmt = 0;
+  const byDay = {};
+  for (const x of R) {
+    const isGross = GROSS.has(x.status);
+    if (isGross) gross++;
+    if (x.billable) billable++;
+    const pay = x.billable && !credited(x) ? Number(x.cost || 0) : 0;
+    payable += pay;
+    if (credited(x)) creditedAmt += Number(x.cost || 0);
+    const d = (x.started_at || x.created_at || '').slice(0, 10);
+    if (d && (isGross || x.billable)) { (byDay[d] ||= { day: d, gross: 0, billable: 0, spend: 0 }); if (isGross) byDay[d].gross++; if (x.billable) { byDay[d].billable++; byDay[d].spend += pay; } }
+  }
+  const start = new Date(fromISO), end = new Date(toISO);
+  const by_day = [];
+  for (let d = new Date(start.toISOString().slice(0, 10)); d <= end; d = new Date(d.getTime() + 864e5)) {
+    const k = d.toISOString().slice(0, 10);
+    const row = byDay[k] || { day: k, gross: 0, billable: 0, spend: 0 };
+    by_day.push({ day: k, gross: row.gross, billable: row.billable, spend: +row.spend.toFixed(2) });
+  }
+  res.json({
+    totals: { gross, billable, payable: +payable.toFixed(2), credited: +creditedAmt.toFixed(2) },
+    by_day
+  });
+});
+
 export default r;

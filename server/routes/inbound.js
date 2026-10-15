@@ -56,6 +56,32 @@ r.post('/:id/answered', async (req, res) => {
   res.json({ won: true, call: won, lead_id: leadId });
 });
 
+// POST /api/inbound/:id/dispute — credit (don't pay) a billable call. Admin/manager.
+r.post('/:id/dispute', async (req, res) => {
+  const { data: me } = await supabaseAdmin.from('users').select('id, role, org_id').eq('id', req.user.id).single();
+  if (!me || !['manager', 'admin', 'super_admin'].includes(me.role)) return res.status(403).json({ error: 'not allowed' });
+  const credit = req.body.credit !== false; // default: credit it
+  const { data, error } = await supabaseAdmin.from('inbound_calls')
+    .update({ disputed: true, dispute_status: credit ? 'credited' : 'open', dispute_reason: req.body.reason || null })
+    .eq('id', req.params.id).eq('org_id', me.org_id).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+// GET /api/inbound/billable — recent billable calls for crediting (admin/manager).
+r.get('/billable', async (req, res) => {
+  const { data: me } = await supabaseAdmin.from('users').select('role, org_id').eq('id', req.user.id).single();
+  if (!me || !['manager', 'admin', 'super_admin'].includes(me.role)) return res.status(403).json({ error: 'not allowed' });
+  let q = supabaseAdmin.from('inbound_calls')
+    .select('id, from_number, caller_state, cost, talk_seconds, created_at, disputed, dispute_status, campaigns(name), agent:users!inbound_calls_agent_id_fkey(full_name)')
+    .eq('org_id', me.org_id).eq('billable', true).order('created_at', { ascending: false }).limit(200);
+  if (req.query.from) q = q.gte('created_at', req.query.from);
+  if (req.query.to) q = q.lte('created_at', req.query.to);
+  const { data, error } = await q;
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
 // GET /api/inbound/recent — recent inbound calls (managers/admins), for testing/QA.
 r.get('/recent', async (req, res) => {
   const { data: me } = await supabaseAdmin.from('users').select('role, org_id').eq('id', req.user.id).single();

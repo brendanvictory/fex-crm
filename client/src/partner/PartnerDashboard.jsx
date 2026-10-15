@@ -15,6 +15,7 @@ export default function PartnerDashboard({ sourceId = null, features = {} }) {
   const [disps, setDisps] = useState([]);
   const [rejects, setRejects] = useState([]);
   const [returns, setReturns] = useState([]);
+  const [inbound, setInbound] = useState(null);
   const [err, setErr] = useState('');
   const [showKey, setShowKey] = useState(false);
 
@@ -35,10 +36,11 @@ export default function PartnerDashboard({ sourceId = null, features = {} }) {
       api(`/partner/timeseries?${qs()}`),
       api(`/partner/dispositions?${qs()}`),
       api(`/partner/rejections?${qs()}`),
-      f.returns ? api(`/partner/returns?${qs()}`) : Promise.resolve([])
-    ]).then(([o, t, d, r, ret]) => {
+      f.returns ? api(`/partner/returns?${qs()}`) : Promise.resolve([]),
+      api(`/partner/inbound?${qs()}`).catch(() => null)
+    ]).then(([o, t, d, r, ret, inb]) => {
       if (cancelled) return;
-      setOv(o); setSeries(t); setDisps(d); setRejects(r); setReturns(ret);
+      setOv(o); setSeries(t); setDisps(d); setRejects(r); setReturns(ret); setInbound(inb);
     }).catch((e) => !cancelled && setErr(e.message));
     return () => { cancelled = true; };
   }, [range, sourceId]); // eslint-disable-line
@@ -73,6 +75,21 @@ export default function PartnerDashboard({ sourceId = null, features = {} }) {
         {f.sales && <Kpi label="Sold" value={c.sold} sub={`${pctStr(c.close_rate)} close rate`} />}
         {f.returns && <Kpi label="Credits" value={ov.returns.count} sub={`${money(ov.returns.credited)} credited`} />}
       </div>
+
+      {inbound && (inbound.totals.gross > 0 || inbound.totals.payable > 0) && (
+        <>
+          <div className="section-title">Inbound calls</div>
+          <div className="kpis">
+            <Kpi label="Calls delivered" value={inbound.totals.gross} />
+            <Kpi label="Billable calls" value={inbound.totals.billable} />
+            <Kpi label="Amount billable" value={money(inbound.totals.payable)} sub={inbound.totals.credited ? `${money(inbound.totals.credited)} credited` : ''} />
+          </div>
+          <div className="chart-card full">
+            <h3>Billable calls per day</h3>
+            <TrendChart data={inbound.by_day} xKey="day" yKey="billable" />
+          </div>
+        </>
+      )}
 
       <div className="chart-card full">
         <h3>Leads posted per day</h3>

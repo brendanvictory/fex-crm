@@ -278,4 +278,89 @@ r.get('/activity', async (req, res) => {
   res.json({ agents, totals, by_day, by_hour: byHour, by_dow: byDow });
 });
 
+// GET /api/reports/inbound — inbound pay-per-call aggregates.
+// Filters: from, to, campaign, source. admin/manager see the org; agents their own.
+r.get('/inbound', async (req, res) => {
+  const { from, to, campaign, source } = req.query;
+  const { data: me } = await supabaseAdmin.from('users').select('id, role, org_id').eq('id', req.user.id).single();
+  if (!me) return res.status(400).json({ error: 'no profile' });
+
+  let q = supabaseAdmin.from('inbound_calls')
+    .select('status, reject_reason, billable, cost, talk_seconds, campaign_id, source_id, agent_id, disputed, dispute_status, ping_at, started_at, answered_at, created_at')
+    .eq('org_id', me.org_id).limit(100000);
+  if (from) q = q.gte('created_at', from);
+  if (to) q = q.lte('created_at', to);
+  if (campaign) q = q.eq('campaign_id', campaign);
+  if (source) q = q.eq('source_id', source);
+  if (!['admin', 'super_admin', 'manager'].includes(me.role)) q = q.eq('agent_id', me.id);
+  const { data: rows, error } = await q;
+  if (error) return res.status(400).json({ error: error.message });
+
+  const [{ data: camps }, { data: srcs }] = await Promise.all([
+    supabaseAdmin.from('campaigns').select('id, name').eq('org_id', me.org_id),
+    supabaseAdmin.from('lead_sources').select('id, name').eq('org_id', me.org_id)
+  ]);
+  const campName = new Map((camps || []).map((c) => [c.id, c.name]));
+  const srcName = new Map((srcs || []).map((s) => [s.id, s.name]));
+
+  const GROSS = new Set(['ringing', 'answered', 'completed', 'voicemail', 'abandoned']);
+  const credited = (x) => x.disputed && x.dispute_status === 'credited';
+
+  const t = { pings: 0, rejected: 0, gross: 0, answered: 0, billable: 0, spend: 0, credited: 0, talkSum: 0, talkN: 0 };
+  const reasons = {};
+  const byCampaign = {};
+  const bySource = {};
+  const byDay = {};
+
+  for (const x of rows) {
+    if (x.ping_at) t.pings++;
+    if (x.status === 'rejected') { t.rejected++; reasons[x.reject_reason || 'other'] = (reasons[x.reject_reason || 'other'] || 0) + 1; }
+    const isGross = GROSS.has(x.status);
+    if (isGross) t.gross++;
+    if (x.answered_at || x.status === 'answered' || x.status === 'completed') t.answered++;
+    const payCost = x.billable && !credited(x) ? Number(x.cost || 0) : 0;
+    if (x.billable) { t.billable++; t.spend += payCost; }
+    if (credited(x)) t.credited += Number(x.cost || 0);
+    if (x.billable && x.talk_seconds != null) { t.talkSum += x.talk_seconds; t.talkN++; }
+
+    if (isGross || x.billable) {
+      const ck = x.campaign_id || '__none__';
+      (byCampaign[ck] ||= { key: ck, label: campName.get(ck) || 'Unassigned', gross: 0, billable: 0, spend: 0 });
+      if (isGross) byCampaign[ck].gross++;
+      if (x.billable) { byCampaign[ck].billable++; byCampaign[ck].spend += payCost; }
+
+      const sk = x.source_id || '__none__';
+      (bySource[sk] ||= { key: sk, label: srcName.get(sk) || 'Direct / none', gross: 0, billable: 0, spend: 0 });
+      if (isGross) bySource[sk].gross++;
+      if (x.billable) { bySource[sk].billable++; bySource[sk].spend += payCost; }
+
+      const d = (x.started_at || x.created_at || '').slice(0, 10);
+      if (d) { (byDay[d] ||= { day: d, gross: 0, billable: 0, spend: 0 }); if (isGross) byDay[d].gross++; if (x.billable) { byDay[d].billable++; byDay[d].spend += payCost; } }
+    }
+  }
+
+  const start = from ? new Date(from) : new Date(Date.now() - 29 * 864e5);
+  const end = to ? new Date(to) : new Date();
+  const by_day = [];
+  for (let d = new Date(start.toISOString().slice(0, 10)); d <= end; d = new Date(d.getTime() + 864e5)) {
+    const k = d.toISOString().slice(0, 10);
+    const row = byDay[k] || { day: k, gross: 0, billable: 0, spend: 0 };
+    by_day.push({ day: k, gross: row.gross, billable: row.billable, spend: +row.spend.toFixed(2) });
+  }
+
+  res.json({
+    totals: {
+      pings: t.pings, rejected: t.rejected, gross: t.gross, answered: t.answered,
+      billable: t.billable, spend: +t.spend.toFixed(2), credited: +t.credited.toFixed(2),
+      connect_rate: t.gross ? Math.round((t.answered / t.gross) * 100) : 0,
+      billable_rate: t.gross ? Math.round((t.billable / t.gross) * 100) : 0,
+      avg_talk_sec: t.talkN ? Math.round(t.talkSum / t.talkN) : 0
+    },
+    by_campaign: Object.values(byCampaign).sort((a, b) => b.gross - a.gross).map((r) => ({ ...r, spend: +r.spend.toFixed(2) })),
+    by_source: Object.values(bySource).sort((a, b) => b.gross - a.gross).map((r) => ({ ...r, spend: +r.spend.toFixed(2) })),
+    by_day,
+    reject_reasons: Object.entries(reasons).map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count)
+  });
+});
+
 export default r;
