@@ -22,7 +22,9 @@ export function DialerProvider({ children }) {
   const [error, setError] = useState('');
   const [dispoFor, setDispoFor] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [incoming, setIncoming] = useState(null);   // { call, from, lead }
+  const [incoming, setIncoming] = useState(null);   // { call, from, lead, inbound_call_id, campaign }
+  const [available, setAvailableState] = useState(false);
+  const availableRef = useRef(false);
 
   const startTimer = () => { setSeconds(0); clearInterval(timerRef.current); timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000); };
   const stopTimer = () => clearInterval(timerRef.current);
@@ -43,7 +45,9 @@ export function DialerProvider({ children }) {
   const handleIncoming = useCallback(async (call) => {
     if (statusRef.current === 'connecting' || statusRef.current === 'in-call') { try { call.reject(); } catch { /* */ } return; }
     const from = call.parameters?.From || call.customParameters?.get?.('From') || '';
-    setIncoming({ call, from, lead: null });
+    const inboundCallId = call.customParameters?.get?.('inbound_call_id') || null;
+    const campaign = call.customParameters?.get?.('campaign') || null;
+    setIncoming({ call, from, lead: null, inbound_call_id: inboundCallId, campaign });
     setPanelOpen(true);
     try { const { lead } = await api(`/calls/lookup?number=${encodeURIComponent(from)}`); if (lead) setIncoming((i) => (i ? { ...i, lead } : i)); } catch { /* */ }
     call.on('cancel', () => setIncoming(null));
@@ -145,7 +149,24 @@ export function DialerProvider({ children }) {
     setLead(displayLead); setStatus('connecting'); setMuted(false); setIncoming(null); setPanelOpen(true);
     wireCall(call, { call_id, displayLead });
     try { call.accept(); } catch (e) { setError(e?.message || 'Could not accept'); }
+    // Claim the inbound campaign call (first-wins) so billing attaches to us.
+    if (inc.inbound_call_id) api(`/inbound/${inc.inbound_call_id}/answered`, { method: 'POST' }).catch(() => {});
   }, [incoming, wireCall]);
+
+  // ---- Inbound presence (available to take campaign calls) ----
+  const setAvailable = useCallback(async (on) => {
+    setAvailableState(on); availableRef.current = on;
+    try { await api('/presence', { method: 'POST', body: JSON.stringify({ status: on ? 'available' : 'away' }) }); }
+    catch (e) { setError(e?.message || 'Could not update availability'); }
+  }, []);
+
+  useEffect(() => {
+    api('/presence/me').then((p) => { const a = p?.inbound_status === 'available'; setAvailableState(a); availableRef.current = a; }).catch(() => {});
+    // Heartbeat so routing knows we're really here; if the tab closes, the
+    // server stops routing to us within ~90s (stale last_seen).
+    const hb = setInterval(() => { if (availableRef.current) api('/presence/heartbeat', { method: 'POST' }).catch(() => {}); }, 30000);
+    return () => clearInterval(hb);
+  }, []);
 
   const rejectIncoming = useCallback(() => { try { incoming?.call.reject(); } catch { /* */ } setIncoming(null); }, [incoming]);
 
@@ -184,7 +205,8 @@ export function DialerProvider({ children }) {
       ready, status, lead, leadLabel, muted, seconds, error, setError,
       startCall, startManualCall, hangup, toggleMute, sendDigit,
       dispoFor, closeDispo, callAgain, panelOpen, openPhone, closePhone,
-      incoming, acceptIncoming, rejectIncoming, recordGreeting
+      incoming, acceptIncoming, rejectIncoming, recordGreeting,
+      available, setAvailable
     }}>
       {children}
     </Ctx.Provider>

@@ -19,6 +19,10 @@ import salesRouter from './routes/sales.js';
 import kbRouter from './routes/kb.js';
 import onboardingRouter from './routes/onboarding.js';
 import partnerRouter from './routes/partner.js';
+import pingRouter from './routes/ping.js';
+import presenceRouter from './routes/presence.js';
+import campaignsRouter from './routes/campaigns.js';
+import inboundRouter from './routes/inbound.js';
 
 dotenv.config();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -40,6 +44,9 @@ app.use('/api/ingest', ingestRouter);
 // public because Twilio calls them.
 app.use('/api/voice', voiceRouter);
 
+// PUBLIC: inbound vendors ping here (auth is the campaign's ping key).
+app.use('/api/ping', pingRouter);
+
 app.get('/api/me', requireAuth, async (req, res) => {
   const { data, error } = await req.sb
     .from('users').select('*').eq('id', req.user.id).single();
@@ -60,6 +67,9 @@ app.use('/api/sales', requireAuth, salesRouter);
 app.use('/api/kb', requireAuth, loadProfile, kbRouter);
 app.use('/api/onboarding', requireAuth, loadProfile, onboardingRouter);
 app.use('/api/partner', requireAuth, loadProfile, partnerRouter);
+app.use('/api/presence', requireAuth, presenceRouter);
+app.use('/api/campaigns', requireAuth, campaignsRouter);
+app.use('/api/inbound', requireAuth, inboundRouter);
 
 // ---------------------------------------------------------------------------
 // Serve the built React app

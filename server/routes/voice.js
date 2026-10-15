@@ -3,6 +3,7 @@ import twilio from 'twilio';
 import { requireAuth } from '../auth.js';
 import { supabaseAdmin } from '../supabase.js';
 import { normalizePhone } from '../lib/leads.js';
+import { availableAgents, capsOk, billableFor } from '../lib/inbound.js';
 
 const r = Router();
 const AccessToken = twilio.jwt.AccessToken;
@@ -224,6 +225,143 @@ r.post('/voicemail', async (req, res) => {
   vr.say({ voice: 'Polly.Joanna' }, 'Thank you. Goodbye.');
   vr.hangup();
   res.type('text/xml').send(vr.toString());
+});
+
+// ===========================================================================
+// INBOUND PAY-PER-CALL CAMPAIGNS
+// Set each campaign number's Twilio Voice webhook to: {base}/api/voice/campaign
+// ===========================================================================
+
+function vmInbound(vr, text) {
+  vr.say({ voice: 'Polly.Joanna' }, text || 'We are unable to take your call right now. Please leave a message after the tone.');
+  vr.record({ maxLength: 120, playBeep: true });
+  vr.hangup();
+}
+
+// POST /api/voice/campaign — a call arrives on a campaign number.
+r.post('/campaign', async (req, res) => {
+  const { From, To, CallSid } = req.body;
+  const base = publicBase(req);
+  const vr = new VoiceResponse();
+  const toNum = toE164(To);
+
+  const { data: campaign } = await supabaseAdmin.from('campaigns')
+    .select('*').eq('phone_number', toNum).maybeSingle();
+  if (!campaign || !campaign.is_active) { vr.say('Sorry, this number is not in service.'); vr.hangup(); return res.type('text/xml').send(vr.toString()); }
+
+  // Resolve the call record. Ping campaigns must match a recent accepted ping.
+  let call = null;
+  let state = null;
+  if (campaign.type === 'ping') {
+    const since = new Date(Date.now() - 3 * 60 * 1000).toISOString();
+    const { data: pings } = await supabaseAdmin.from('inbound_calls')
+      .select('id, from_number, caller_state')
+      .eq('campaign_id', campaign.id).eq('status', 'accepted').gte('ping_at', since)
+      .order('ping_at', { ascending: false }).limit(10);
+    const fromNorm = normalizePhone(From);
+    call = (pings || []).find((p) => !p.from_number || normalizePhone(p.from_number) === fromNorm) || (pings || [])[0] || null;
+    if (!call) { vr.say('This call was not approved. Goodbye.'); vr.hangup(); return res.type('text/xml').send(vr.toString()); }
+    state = call.caller_state || null;
+    await supabaseAdmin.from('inbound_calls').update({
+      twilio_sid: CallSid, from_number: From, started_at: new Date().toISOString(), status: 'ringing'
+    }).eq('id', call.id);
+  } else {
+    // Direct: accept all, create the record now. Caps still protect spend.
+    const caps = await capsOk(campaign);
+    const { data: created } = await supabaseAdmin.from('inbound_calls').insert({
+      org_id: campaign.org_id, campaign_id: campaign.id, source_id: campaign.source_id,
+      twilio_sid: CallSid, from_number: From, status: caps.ok ? 'ringing' : 'rejected',
+      reject_reason: caps.ok ? null : caps.reason, started_at: new Date().toISOString()
+    }).select('id').single();
+    call = created;
+    if (!caps.ok) { vmInbound(vr, 'Thanks for calling Coverwise. Please leave a message and we will call you back.'); return res.type('text/xml').send(vr.toString()); }
+    state = null; // direct has no verified caller state
+  }
+
+  const agents = await availableAgents(campaign.org_id, state);
+  if (!agents.length) {
+    await supabaseAdmin.from('inbound_calls').update({ status: 'voicemail' }).eq('id', call.id);
+    vmInbound(vr, 'Thanks for calling Coverwise. All of our agents are busy. Please leave a message and we will call you right back.');
+    return res.type('text/xml').send(vr.toString());
+  }
+
+  vr.say({ voice: 'Polly.Joanna' }, DISCLOSURE);
+  vr.say({ voice: 'Polly.Joanna' }, 'Thank you for calling. Please hold while we connect you with a licensed agent.');
+
+  const statusUrl = `${base}/api/voice/campaign-status?ic=${call.id}&camp=${campaign.id}`;
+  const whisperUrl = `${base}/api/voice/campaign-whisper?c=${encodeURIComponent(campaign.name)}`;
+  const dial = vr.dial({
+    answerOnBridge: true, timeout: 25,
+    record: 'record-from-answer-dual',
+    action: statusUrl,
+    recordingStatusCallback: `${base}/api/voice/campaign-recording?ic=${call.id}`,
+    recordingStatusCallbackEvent: 'completed'
+  });
+  for (const aid of agents) {
+    const c = dial.client({ url: whisperUrl });
+    c.identity(aid);
+    c.parameter({ name: 'inbound_call_id', value: call.id });
+    c.parameter({ name: 'campaign', value: campaign.name });
+    c.parameter({ name: 'inbound', value: '1' });
+  }
+  res.type('text/xml').send(vr.toString());
+});
+
+// POST /api/voice/campaign-whisper — played to the agent before bridging.
+r.post('/campaign-whisper', (req, res) => {
+  const vr = new VoiceResponse();
+  const name = req.query.c ? decodeURIComponent(req.query.c) : 'a campaign';
+  vr.say({ voice: 'Polly.Joanna' }, `Inbound final expense call from ${name}.`);
+  res.type('text/xml').send(vr.toString());
+});
+
+// POST /api/voice/campaign-status — Dial finished: compute billing, reset agent.
+r.post('/campaign-status', async (req, res) => {
+  const ic = req.query.ic;
+  const base = publicBase(req);
+  const vr = new VoiceResponse();
+  if (!ic) { vr.hangup(); return res.type('text/xml').send(vr.toString()); }
+
+  const { data: call } = await supabaseAdmin.from('inbound_calls')
+    .select('id, campaign_id, agent_id, status').eq('id', ic).single();
+  const { data: campaign } = call?.campaign_id
+    ? await supabaseAdmin.from('campaigns').select('buffer_seconds, cost_per_call').eq('id', call.campaign_id).single()
+    : { data: null };
+
+  const answered = req.body.DialCallStatus === 'completed';
+  const talk = req.body.DialCallDuration ? parseInt(req.body.DialCallDuration, 10) : 0;
+
+  if (answered && campaign) {
+    const { billable, cost } = billableFor(campaign, talk);
+    await supabaseAdmin.from('inbound_calls').update({
+      status: 'completed', ended_at: new Date().toISOString(),
+      talk_seconds: talk, billable, cost, billable_at: billable ? new Date().toISOString() : null
+    }).eq('id', ic);
+  }
+
+  // Release the agent who took it back to available.
+  if (call?.agent_id) {
+    await supabaseAdmin.from('users')
+      .update({ inbound_status: 'available', inbound_status_at: new Date().toISOString() })
+      .eq('id', call.agent_id).eq('inbound_status', 'on_call');
+  }
+
+  if (!answered) {
+    // Nobody picked up → voicemail.
+    await supabaseAdmin.from('inbound_calls').update({ status: 'voicemail', ended_at: new Date().toISOString() }).eq('id', ic);
+    vr.say({ voice: 'Polly.Joanna' }, 'Sorry we missed you. Please leave a message and we will call you right back.');
+    vr.record({ maxLength: 120, playBeep: true });
+  }
+  vr.hangup();
+  res.type('text/xml').send(vr.toString());
+});
+
+// POST /api/voice/campaign-recording — store the recording on the inbound call.
+r.post('/campaign-recording', async (req, res) => {
+  const ic = req.query.ic;
+  const url = req.body.RecordingUrl;
+  if (ic && url) await supabaseAdmin.from('inbound_calls').update({ recording_url: url + '.mp3' }).eq('id', ic);
+  res.type('text/xml').send('<Response/>');
 });
 
 export default r;

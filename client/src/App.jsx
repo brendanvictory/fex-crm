@@ -24,6 +24,7 @@ import Help from './pages/Help.jsx';
 import GettingStarted from './pages/GettingStarted.jsx';
 import Partners from './pages/Partners.jsx';
 import AgentActivity from './pages/AgentActivity.jsx';
+import Campaigns from './pages/Campaigns.jsx';
 import PartnerPortal from './pages/PartnerPortal.jsx';
 import { api } from './api';
 import { DialerProvider } from './dialer/DialerContext.jsx';
@@ -87,6 +88,7 @@ export default function App() {
         <Route path="/help" element={<Help />} />
         <Route path="/getting-started" element={<GettingStarted />} />
         <Route path="/partners" element={<Partners />} />
+        <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/sources" element={<Sources />} />
         <Route path="/users" element={<Users />} />
         <Route path="/users/:id" element={<UserDetail />} />

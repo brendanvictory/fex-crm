@@ -67,6 +67,16 @@ button.side-link { width: 100%; text-align: left; background: transparent; borde
 .side-link.phone-link::before { content: '☎'; font-size: 15px; }
 .side-link.phone-link:hover { background: #b6e6fa; color: var(--navy); }
 
+/* Inbound availability toggle */
+.avail-toggle { width: 100%; display: flex; align-items: center; gap: 8px; cursor: pointer;
+  background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15); color: rgba(255,255,255,.75);
+  border-radius: 9px; padding: 8px 12px; font-family: inherit; font-weight: 700; font-size: 13px; margin-bottom: 14px; }
+.avail-toggle .avail-dot { width: 9px; height: 9px; border-radius: 999px; background: #9aa3b2; flex: none; }
+.avail-toggle.on { background: rgba(23,173,114,.18); border-color: #17ad72; color: #d7f5e8; }
+.avail-toggle.on .avail-dot { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.25); }
+.avail-toggle:hover { border-color: rgba(255,255,255,.35); }
+.inc-campaign { font-size: 12px; font-weight: 700; color: var(--navy); background: var(--sky-100); border-radius: 6px; padding: 2px 8px; display: inline-block; margin-bottom: 4px; }
+
 /* Collapsible groups */
 .nav-group { margin-top: 10px; }
 .nav-group-header {

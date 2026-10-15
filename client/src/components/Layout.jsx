@@ -57,6 +57,7 @@ const GROUPS = [
   ] },
   { key: 'admin', label: 'Admin', icon: 'admin', items: [
     { to: '/sources', label: 'Sources', icon: 'inbox' },
+    { to: '/campaigns', label: 'Campaigns', icon: 'calling' },
     { to: '/partners', label: 'Partners', icon: 'share' },
     { to: '/scripts', label: 'Scripts', icon: 'file' },
     { to: '/commissions', label: 'Commissions', icon: 'percent' },
@@ -114,6 +115,10 @@ export default function Layout({ children, fluid }) {
         <div className="brand-chip"><img src="/coverwise-logo.png" alt="Coverwise" /></div>
 
         <button className="side-link phone-link" onClick={() => dialer?.openPhone()}>Open Phone</button>
+        <button className={'avail-toggle' + (dialer?.available ? ' on' : '')} onClick={() => dialer?.setAvailable(!dialer.available)}>
+          <span className="avail-dot" />
+          {dialer?.available ? 'Available for calls' : 'Not taking calls'}
+        </button>
 
         <nav className="side-nav">
           <NavLink item={HOME} />

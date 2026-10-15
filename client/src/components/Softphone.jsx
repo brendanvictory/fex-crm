@@ -51,7 +51,8 @@ export default function Softphone() {
 
       {incoming && (
         <div className="incoming-card">
-          <div className="inc-ring">Incoming call</div>
+          <div className="inc-ring">{incoming.campaign ? 'Inbound campaign call' : 'Incoming call'}</div>
+          {incoming.campaign && <div className="inc-campaign">{incoming.campaign}</div>}
           <div className="inc-name">{incoming.lead ? leadName(incoming.lead) : (incoming.from || 'Unknown')}</div>
           {incoming.lead && <div className="muted" style={{ fontSize: 12 }}>{incoming.from}</div>}
           <div className="inc-actions">
