@@ -199,6 +199,7 @@ export default function LeadDetail() {
               Call
             </button>
           )}
+          {!isNew && <button className="btn-ghost" onClick={() => dialer?.openQualify(id)}>Qualify</button>}
           <button className="btn-ghost" onClick={() => navigate('/leads')}>← Back to Leads</button>
         </div>
       </div>

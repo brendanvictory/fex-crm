@@ -27,6 +27,18 @@ r.post('/heartbeat', async (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /api/presence/busy — flip on_call during a call so routing skips me.
+// Only moves available<->on_call; never overrides 'away'.
+r.post('/busy', async (req, res) => {
+  const busy = !!req.body.busy;
+  const from = busy ? 'available' : 'on_call';
+  const to = busy ? 'on_call' : 'available';
+  await supabaseAdmin.from('users')
+    .update({ inbound_status: to, inbound_status_at: new Date().toISOString(), last_seen_at: new Date().toISOString() })
+    .eq('id', req.user.id).eq('inbound_status', from);
+  res.json({ ok: true });
+});
+
 // GET /api/presence/roster — who's available (managers/admins).
 r.get('/roster', async (req, res) => {
   const { data: me } = await supabaseAdmin.from('users').select('role, org_id').eq('id', req.user.id).single();

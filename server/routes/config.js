@@ -384,6 +384,28 @@ r.delete('/rebuttals/:id', async (req, res) => {
   res.status(204).end();
 });
 
+// ---- Product-tier links (qualification screen buttons) ----
+r.get('/tier-links', async (req, res) => {
+  const org = await myOrg(req.user.id);
+  const { data, error } = await supabaseAdmin.from('tier_links')
+    .select('*').eq('org_id', org).order('sort');
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+r.put('/tier-links', async (req, res) => {
+  const me = await canManage(req.user.id);
+  if (!me) return res.status(403).json({ error: 'not permitted' });
+  const links = Array.isArray(req.body.links) ? req.body.links : [];
+  for (const l of links) {
+    if (!l.tier) continue;
+    await supabaseAdmin.from('tier_links')
+      .update({ url: l.url || null, label: l.label || undefined })
+      .eq('org_id', me.org_id).eq('tier', l.tier);
+  }
+  const { data } = await supabaseAdmin.from('tier_links').select('*').eq('org_id', me.org_id).order('sort');
+  res.json(data);
+});
+
 // ---- Email test ----
 r.get('/email-status', async (req, res) => {
   res.json({ configured: mailConfigured() });

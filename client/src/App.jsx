@@ -29,6 +29,7 @@ import PartnerPortal from './pages/PartnerPortal.jsx';
 import { api } from './api';
 import { DialerProvider } from './dialer/DialerContext.jsx';
 import Softphone from './components/Softphone.jsx';
+import QualificationModal from './components/QualificationModal.jsx';
 
 export default function App() {
   const [session, setSession] = useState(undefined); // undefined = still loading
@@ -95,6 +96,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
       <Softphone />
+      <QualificationModal />
     </DialerProvider>
   );
 }

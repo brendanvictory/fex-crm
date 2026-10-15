@@ -25,6 +25,10 @@ export function DialerProvider({ children }) {
   const [incoming, setIncoming] = useState(null);   // { call, from, lead, inbound_call_id, campaign }
   const [available, setAvailableState] = useState(false);
   const availableRef = useRef(false);
+  const [qualifyLeadId, setQualifyLeadId] = useState(null);
+  const [qualifyCallId, setQualifyCallId] = useState(null);
+  const openQualify = useCallback((leadId, callId = null) => { setQualifyLeadId(leadId); setQualifyCallId(callId); }, []);
+  const closeQualify = useCallback(() => { setQualifyLeadId(null); setQualifyCallId(null); }, []);
 
   const startTimer = () => { setSeconds(0); clearInterval(timerRef.current); timerRef.current = setInterval(() => setSeconds((s) => s + 1), 1000); };
   const stopTimer = () => clearInterval(timerRef.current);
@@ -33,12 +37,13 @@ export function DialerProvider({ children }) {
   const wireCall = useCallback((call, meta) => {
     callRef.current = call;
     call.on('accept', () => { setStatus('in-call'); startTimer(); });
+    const releaseBusy = () => { api('/presence/busy', { method: 'POST', body: JSON.stringify({ busy: false }) }).catch(() => {}); };
     call.on('disconnect', () => {
-      stopTimer(); setLead(null); callRef.current = null;
+      stopTimer(); setLead(null); callRef.current = null; releaseBusy();
       if (meta.noDispo) { setStatus('idle'); }
       else { setStatus('ended'); setDispoFor({ call_id: meta.call_id, lead: meta.displayLead || null, origin: meta.origin || null }); }
     });
-    call.on('cancel', () => { stopTimer(); setStatus('idle'); setLead(null); callRef.current = null; });
+    call.on('cancel', () => { stopTimer(); setStatus('idle'); setLead(null); callRef.current = null; releaseBusy(); });
     call.on('error', (e) => setError(e?.message || 'Call error'));
   }, []);
 
@@ -130,6 +135,8 @@ export function DialerProvider({ children }) {
       setStatus('connecting');
       setMuted(false);
       setPanelOpen(true);
+      // Mark on_call so inbound routing skips me while I'm on an outbound call.
+      api('/presence/busy', { method: 'POST', body: JSON.stringify({ busy: true }) }).catch(() => {});
       const call = await device.connect({ params: { To: res.to, callerId: res.caller_id || '', call_id: res.call_id } });
       wireCall(call, { call_id: res.call_id, displayLead: displayLead || { phone: res.to }, origin });
     } catch (e) {
@@ -149,8 +156,12 @@ export function DialerProvider({ children }) {
     setLead(displayLead); setStatus('connecting'); setMuted(false); setIncoming(null); setPanelOpen(true);
     wireCall(call, { call_id, displayLead });
     try { call.accept(); } catch (e) { setError(e?.message || 'Could not accept'); }
-    // Claim the inbound campaign call (first-wins) so billing attaches to us.
-    if (inc.inbound_call_id) api(`/inbound/${inc.inbound_call_id}/answered`, { method: 'POST' }).catch(() => {});
+    // Claim the inbound campaign call (first-wins); open the qualification screen.
+    if (inc.inbound_call_id) {
+      api(`/inbound/${inc.inbound_call_id}/answered`, { method: 'POST' })
+        .then((r) => { if (r?.won && r.lead_id) { setQualifyLeadId(r.lead_id); setQualifyCallId(inc.inbound_call_id); } })
+        .catch(() => {});
+    }
   }, [incoming, wireCall]);
 
   // ---- Inbound presence (available to take campaign calls) ----
@@ -206,7 +217,8 @@ export function DialerProvider({ children }) {
       startCall, startManualCall, hangup, toggleMute, sendDigit,
       dispoFor, closeDispo, callAgain, panelOpen, openPhone, closePhone,
       incoming, acceptIncoming, rejectIncoming, recordGreeting,
-      available, setAvailable
+      available, setAvailable,
+      qualifyLeadId, qualifyCallId, openQualify, closeQualify
     }}>
       {children}
     </Ctx.Provider>

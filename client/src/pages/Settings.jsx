@@ -20,7 +20,15 @@ export default function Settings() {
   const [myPwMsg, setMyPwMsg] = useState('');
   const [emailStatus, setEmailStatus] = useState(null);
   const [emailMsg, setEmailMsg] = useState('');
+  const [tierLinks, setTierLinks] = useState([]);
+  const [tierMsg, setTierMsg] = useState('');
   useEffect(() => { api('/config/email-status').then(setEmailStatus).catch(() => {}); }, []);
+  useEffect(() => { api('/config/tier-links').then(setTierLinks).catch(() => {}); }, []);
+  async function saveTierLinks() {
+    setTierMsg(''); setErr('');
+    try { setTierLinks(await api('/config/tier-links', { method: 'PUT', body: JSON.stringify({ links: tierLinks }) })); setTierMsg('Saved.'); }
+    catch (e) { setErr(e.message); }
+  }
   async function testEmail() {
     setEmailMsg(''); setErr('');
     try { const r = await api('/config/test-email', { method: 'POST' }); setEmailMsg(`Test email sent to ${r.to}.`); }
@@ -123,6 +131,22 @@ export default function Settings() {
           </div>
           {greetingAudio && <audio src={greetingAudio} controls autoPlay style={{ marginTop: 12, height: 34 }} />}
           <p className="muted" style={{ fontSize: 12, marginBottom: 0 }}>Recording connects your softphone — speak after the tone, press # when done, then hit Refresh.</p>
+        </div>
+
+        <div className="card">
+          <div className="section-title">Qualification plan-tier links</div>
+          <p className="muted" style={{ marginTop: 0 }}>The four buttons on the qualification screen open these links (the carrier application for each tier).</p>
+          {tierLinks.map((t, i) => (
+            <div key={t.tier} className="filters" style={{ marginBottom: 8 }}>
+              <span style={{ minWidth: 150, fontWeight: 600 }}>{t.label}</span>
+              <input style={{ flex: 1 }} value={t.url || ''} placeholder="https://carrier-app-link…"
+                onChange={(e) => setTierLinks((rows) => rows.map((r, j) => j === i ? { ...r, url: e.target.value } : r))} />
+            </div>
+          ))}
+          <div className="row-actions" style={{ marginTop: 8 }}>
+            <button className="btn" onClick={saveTierLinks}>Save links</button>
+            {tierMsg && <span className="ok">{tierMsg}</span>}
+          </div>
         </div>
 
         <div className="card">

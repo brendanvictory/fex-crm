@@ -180,6 +180,53 @@ r.post('/:id/move', async (req, res) => {
   res.json(data);
 });
 
+// ---- Pre-underwriting qualification ----
+// GET /api/leads/:id/qualification — latest qualification for this lead.
+r.get('/:id/qualification', async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('lead_qualifications').select('*').eq('lead_id', req.params.id)
+    .order('created_at', { ascending: false }).limit(1).maybeSingle();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data || null);
+});
+
+// POST /api/leads/:id/qualification — save answers + chosen tier; also sync the
+// core lead fields the questionnaire collected.
+r.post('/:id/qualification', async (req, res) => {
+  const { data: me } = await supabaseAdmin.from('users').select('id, org_id').eq('id', req.user.id).single();
+  const { data: lead, error: le } = await supabaseAdmin
+    .from('leads').select('id, org_id').eq('id', req.params.id).single();
+  if (le) return res.status(404).json({ error: 'lead not found' });
+
+  const answers = req.body.answers || {};
+  const tier = ['level', 'graded', 'modified', 'guaranteed'].includes(req.body.tier) ? req.body.tier : null;
+
+  // Sync known fields onto the lead.
+  const patch = { updated_at: new Date().toISOString(), worked: true };
+  const map = ['first_name', 'last_name', 'email', 'dob', 'gender', 'state', 'zip',
+    'beneficiary_name', 'beneficiary_relationship'];
+  for (const k of map) if (answers[k] != null && answers[k] !== '') patch[k] = answers[k];
+  if (answers.state) patch.state = String(answers.state).toUpperCase().slice(0, 2);
+  if (answers.age != null && answers.age !== '') patch.age = parseInt(answers.age, 10) || null;
+  if (answers.coverage_amount != null && answers.coverage_amount !== '')
+    patch.coverage_amount = Number(String(answers.coverage_amount).replace(/[^0-9.]/g, '')) || null;
+  if (answers.tobacco === 'yes' || answers.tobacco === true) patch.tobacco = true;
+  else if (answers.tobacco === 'no' || answers.tobacco === false) patch.tobacco = false;
+  await supabaseAdmin.from('leads').update(patch).eq('id', lead.id);
+
+  const { data, error } = await supabaseAdmin.from('lead_qualifications').insert({
+    org_id: lead.org_id, lead_id: lead.id, agent_id: me.id,
+    inbound_call_id: req.body.inbound_call_id || null, answers, tier
+  }).select().single();
+  if (error) return res.status(400).json({ error: error.message });
+
+  await supabaseAdmin.from('activity_log').insert({
+    org_id: lead.org_id, entity_type: 'lead', entity_id: lead.id,
+    actor_id: me.id, action: 'qualified', detail: { tier }
+  });
+  res.status(201).json(data);
+});
+
 // ---- Returns / credits (managers & admins) ----
 // GET /api/leads/:id/returns — return history for this lead.
 r.get('/:id/returns', async (req, res) => {
